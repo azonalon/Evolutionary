@@ -1,0 +1,4 @@
+link_libraries(Evolutionary)
+add_executable(Test1 physics/InvertibleNeoHookeanStressDensityTests.cpp)
+add_executable(Test2 physics/MathFunctionTests.cpp)
+add_executable(Test3 physics/ElasticModelTests.cpp)
