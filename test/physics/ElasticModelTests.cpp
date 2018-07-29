@@ -14,8 +14,8 @@ public:
         std::vector<double> vertices = {0, 0, 0, 1, 1, 0};
         std::vector<double> k = {kV};
         std::vector<double> nu = {nuV};
-        std::vector<double> M = {1,1,1};
-        std::vector<std::array<int,3>> indices = {{0,1,2}};
+        std::vector<double> M = {1,1,1,1,1,1};
+        std::vector<std::array<unsigned int,3>> indices = {{0,1,2}};
         ElasticModel em(vertices, indices, k, nu, M,
              ElasticModel::ElasticModelType::NEOHOOKEAN);
         for(unsigned i=0; i<vertices.size(); i++) {
@@ -65,8 +65,8 @@ public:
         std::vector<double> vertices2 =  {0, 0, 0, 1, 1, 1};
         std::vector<double> k =   {1.0};
         std::vector<double> nu =   {0.33};
-        std::vector<std::array<int,3>>indices =  {{0,1,2}};
-        std::vector<double> M =   {1,1,1};
+        std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}};
+        std::vector<double> M =   {1,1,1,1,1,1};
         ElasticModel em1 (vertices1, indices, k, nu, M,
              ElasticModel::ElasticModelType::NEOHOOKEAN);
         ElasticModel em2 (vertices2, indices, k, nu, M,
@@ -96,8 +96,8 @@ public:
         std::vector<double> vertices2 =   {0, 0.7, 0, 1, 1, 0};
         std::vector<double> k =   {1.0};
         std::vector<double> nu =   {0.33};
-        std::vector<std::array<int,3>>indices =  {{0,1,2}};
-        std::vector<double> M =   {1,1,1};
+        std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}};
+        std::vector<double> M =   {1,1,1, 1,1,1};
         ElasticModel em(vertices1, indices, k, nu, M,
             ElasticModel::ElasticModelType::VENANTKIRCHHOFF);
         for(unsigned i=0; i<vertices1.size(); i++) {
@@ -155,8 +155,8 @@ public:
         std::vector<double>vertices2 =  {1.2, 1.1, 0.1, 1.05, 1.06, 1.07};
         std::vector<double>k =  {1.0};
         std::vector<double>nu =  {0.33};
-        std::vector<std::array<int,3>>indices =  {{0,1,2}};
-        std::vector<double> M =  {1,1,1};
+        std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}};
+        std::vector<double> M =  {1,1,1,1,1,1};
         ArrayXd dx(vertices1.size()), f(vertices1.size());
         double psi;
         dx << -.05, .1, -.2, .3, .4, .5;
@@ -209,7 +209,7 @@ public:
     //     std::vector<double> vertices1 =  {0, 0, 0, 1, 1, 0};
     //     std::vector<double> k =  {1.0};
     //     std::vector<double> nu =  {0.33};
-    //     std::vector<std::array<int,3>>indices =  {{0,1,2}};
+    //     std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}};
     //     std::vector<double> M =  {1,1,1,1,1,1};
     //     ElasticModel em1 = new ElasticModel(vertices1, indices, k, nu, M);
     //     em1.venantPiolaStress(new DMatrix2x2(1, 2, 0, 3), em1.lambda[0], em1.mu[0],
@@ -249,8 +249,8 @@ public:
         std::vector<double> vertices =  {0, 0, 0, 1, 1, 0};
         std::vector<double> k =  {kV};
         std::vector<double> nu =  {nuV};
-        std::vector<double> M =  {1,1,1};
-        std::vector<std::array<int,3>>indices =  {{0,1,2}};
+        std::vector<double> M =  {1,1,1,1,1,1};
+        std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}};
         ElasticModel em(vertices, indices, k, nu, M,
             modelType, eps);
 
@@ -287,7 +287,7 @@ public:
     //     std::vector<double> k =  {kV, kV};
     //     std::vector<double> nu =  {nuV, nuV};
     //     std::vector<double> M =  {1,1,1,1,1,1,1, 1};
-    //     std::vector<std::array<int,3>>indices =  {{0,1,2}, {1, 2, 3}};
+    //     std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}, {1, 2, 3}};
     //     ElasticModel em = new ElasticModel(vertices, indices, k, nu, M);
     //
     //     // em.x0.add(1, 0, 0.7);

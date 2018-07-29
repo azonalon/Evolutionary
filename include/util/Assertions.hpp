@@ -1,9 +1,12 @@
-#pragma once
 #include <Eigen/Dense>
 #include <iostream>
 #include <cassert>
+#pragma once
 
-inline void assertArrayEquals(Eigen::MatrixXd a, Eigen::MatrixXd b, double delta) {
+#define assertEqualsTest(a, e, epsilon) _assertEqualsTest(__FILE__, __func__, __LINE__, a, e, epsilon)
+// #define assertTrueTest(a, e, epsilon)   _assertTrueTest(__FILE__, __func__, __LINE__, a, e, epsilon)
+
+inline void assertArrayEquals(Eigen::MatrixXd b, Eigen::MatrixXd a, double delta) {
     if(!a.isApprox(b, delta)) {
         std::cout
         << "Expected Array:\n"
@@ -14,7 +17,7 @@ inline void assertArrayEquals(Eigen::MatrixXd a, Eigen::MatrixXd b, double delta
     }
 }
 
-inline void assertArrayNotEquals(Eigen::MatrixXd a, Eigen::MatrixXd b, double delta) {
+inline void assertArrayNotEquals(Eigen::MatrixXd b, Eigen::MatrixXd a, double delta) {
     if(a.isApprox(b, delta)) {
         std::cout
         << "---------------------------------------"
@@ -37,8 +40,31 @@ inline void assertEquals(double a, double b, double eps) {
         assert(false && "AssertEquals fail.");
     }
 }
+
 inline void assertNotEquals(double a, double b, double eps) {
     if(std::abs(a-b) < eps) {
         assert(false && "AssertNotEquals fail.");
     }
 }
+
+inline bool _assertEqualsTest(const char *file, const char *function, int line, double a, double e, double epsilon) {
+	if (fabs(a - e) <= epsilon) {
+		printf("%s, line %d: check passed\n", file, line);
+		return true;
+	} else {
+		printf("%s, line %d: Actual value %g is not within %g of expected value %g.\n", file, line, a, epsilon, e);
+        throw std::runtime_error("Assertion error.");
+		return false;
+	}
+}
+
+// inline bool _assertTrueTest(const char *file, const char *function, int line, bool v) {
+// 	if (v == true) {
+// 		printf("%s, line %d: check passed\n", file, line);
+// 		return true;
+// 	} else {
+// 		printf("%s, line %d: Result should not have been false.\n", file, line, v, true);
+//         throw std::runtime_error("Assertion error.");
+// 		return false;
+// 	}
+// }

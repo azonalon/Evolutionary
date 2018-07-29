@@ -38,7 +38,7 @@ public:
     unsigned vertexCount() {
         return n/2;
     }
-    static void computeCollisionPenaltyForce(
+    static double computeCollisionPenaltyForce(
         unsigned int iPoint,unsigned int  i, unsigned int j,unsigned int  k,
         const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
 
@@ -65,15 +65,16 @@ public:
      * TODO: implement class for different elastic models and their respective options
      */
     template<class ...Ts>
-    ElasticModel(const std::vector<double>& vertices, const std::vector<std::array<int,3>>& triangles,
+    ElasticModel(const std::vector<double>& vertices, const std::vector<std::array<unsigned int,3>>& triangles,
                 const std::vector<double>& k, const std::vector<double>& nu, const std::vector<double>& M,
                 ElasticModelType model, double eps=0.5):
                         ImplicitODESolver(vertices.size(), M), n(vertices.size()), m(triangles.size()),
                         Bm(m), model(model), neo(eps), Te(m, 3), W(m), mu(m), lambda(m)
                         {
 
-        assert(vertices.size() % 6 == 0);
-        assert(triangles.size() == k.size() && nu.size() == k.size() && M.size() == vertices.size()/2);
+        assert(triangles.size() == k.size());
+        assert(nu.size() == k.size());
+        assert(M.size() == vertices.size());
         assert(vertices.size() % 2 == 0);
         for(unsigned i=0; i<m; i++) {
             Te.row(i) <<
@@ -128,14 +129,14 @@ public:
             // TODO: collision testing, basically you should provide a set points,
             // this triangle is possibly colliding with. for now we check every
             // point (brute force)
+            // TODO: this does not work if one point is contained in multiple triangles
             for(unsigned n=0; n<m; n++){
                 if(n==l) {
-                    n++; // skip this triangle
                     continue;
                 }
                 for(unsigned jj=0; jj<3;jj++) {
                     unsigned int iPoint = 2*Te(n,jj);
-                    computeCollisionPenaltyForce(iPoint, i, j, k, x, dest);
+                    // stressEnergy += computeCollisionPenaltyForce(iPoint, i, j, k, x, dest);
                 }
             }
         }
@@ -175,12 +176,11 @@ public:
             addForceMatrixToVector(temp2x2B, dest, i, j, k, l);
             for(unsigned n=0; n<m; n++){
                 if(n==l) {
-                    n++; // skip this triangle
                     continue;
                 }
                 for(unsigned jj=0; jj<3;jj++) {
                     unsigned int iPoint = 2*Te(n,jj);
-                    computeCollisionPenaltyForceDifferential(iPoint, i, j, k, x, dx, dest);
+                    // computeCollisionPenaltyForceDifferential(iPoint, i, j, k, x, dx, dest);
                 }
             }
         }

@@ -101,6 +101,7 @@ public:
     //             temp1, temp2, M, MI, fExt,
     //             xAlpha, gConst, r, p;
     {
+        assert(n == masses.size());
 
         dn=0; g=0; x0=0; x1=0; x2=0; v=0; xHat=0;
         temp1=0; temp2=0; M=1; MI=1; fExt=0;

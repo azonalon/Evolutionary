@@ -1,4 +1,5 @@
 #include "physics/ElasticModel.hpp"
+static double c = 10000;
 
 double squarePointLineSegmentDistance(double px, double py,
                                             double p0x, double p0y,
@@ -32,7 +33,7 @@ bool pointInTriangle(double px, double py, double p0x, double p0y,
 
 // adds force resulting from point iPoint inside surface (surface is a line from
 // vertex i to j)
-void addCollisionPenaltyForce(
+double addCollisionPenaltyForce(
     unsigned int iPoint, unsigned int i, unsigned int j,
     const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) {
 
@@ -45,15 +46,34 @@ void addCollisionPenaltyForce(
     double dY0 = py-p0y;
     double dX10 = p1x-p0x;
     double dY10 = p1y-p0y;
-    double L2 = dX10*dX10 + dY10*dY10;
-    double s = -dX10*dY0  + dX0*dY10;
 
-    dest[iPoint + 0] +=  dY10 *L2;
-    dest[iPoint + 1] += -dX10 *L2;
-    dest[i + 0]      +=  dY1  *L2 + dX10*s;
-    dest[i + 1]      += -dX1  *L2 + dY10*s;
-    dest[j + 0]      += -dY0  *L2 - dX10*s;
-    dest[j + 1]      +=  dX0  *L2 - dY10*s;
+    double s = -dX10*dY0  + dX0*dY10;
+    double s2 = s*s;
+
+    double L2 = dX10*dX10 + dY10*dY10;
+    double L4 = L2*L2;
+    double L6 = L4*L2;
+
+
+    double eps = 1e-15;
+    double U2 = s2/L2 + eps;
+    double U = sqrt(U2);
+    double phi= s2/L2*U;
+
+    // double q1 = s2 + 2*L2 * U2;
+    // double q2 = q1 + 6*s2;
+    // double q3 = 6*q1*s + 4 *s2*s;
+
+    double kf = s2*s/(L6*U) + 2*s*U/L4;
+
+    dest[iPoint + 0] -= c * kf*( dY10 *L2         );
+    dest[iPoint + 1] -= c * kf*(-dX10 *L2         );
+    dest[i + 0]      -= c * kf*( dY1  *L2 + dX10*s);
+    dest[i + 1]      -= c * kf*(-dX1  *L2 + dY10*s);
+    dest[j + 0]      -= c * kf*(-dY0  *L2 - dX10*s);
+    dest[j + 1]      -= c * kf*( dX0  *L2 - dY10*s);
+
+    return c*phi;
 }
 
 void addCollisionPenaltyForceDifferential(
@@ -115,23 +135,30 @@ void addCollisionPenaltyForceDifferential(
         -(dX10*dY10), -dY10 * dY10, dX10*dY0 - dX10*dY1 + dX0*dY10, dX1*dX10 + 2*dY0*dY10 + L2, -(dX0*dY10), -(dX0*dX10) - 2*dY0*dY10,
         dX10 * dX10, dX10*dY10, -2*dX0*dX10 - dY1*dY10 - dX10 * dX10 - dY10 * dY10, -(dX10*dY0) - dX0*dY10 + dX1*dY10, 2*dX0*dX10 + dY0*dY10, dX10*dY0;
 
-    Eigen::Matrix<double, 6, 6> h = 1/(L10*U3) * f*kfd.transpose() + kf * fd.transpose();
+    Eigen::Matrix<double, 6, 6> h = 1/(L10*U3) * f*kfd.transpose() + kf * fd;
     Eigen::Matrix<double, 6, 1> dxtmp;
     dxtmp << dx(iPoint), dx(iPoint+1), dx(i), dx(i+1), dx(j), dx(j+1);
     Eigen::Matrix<double, 6, 1> df = h*dxtmp;
-    dest(iPoint + 0) += df(0);
-    dest(iPoint + 1) += df(1);
-    dest(i + 0)      += df(2);
-    dest(i + 1)      += df(3);
-    dest(j + 0)      += df(4);
-    dest(j + 1)      += df(5);
+    dest(iPoint + 0) -= c*df(0);
+    dest(iPoint + 1) -= c*df(1);
+    dest(i + 0)      -= c*df(2);
+    dest(i + 1)      -= c*df(3);
+    dest(j + 0)      -= c*df(4);
+    dest(j + 1)      -= c*df(5);
 }
 
 
-void ElasticModel::computeCollisionPenaltyForce(
+double ElasticModel::computeCollisionPenaltyForce(
     unsigned int iPoint, unsigned int i, unsigned int j, unsigned int k,
     const Eigen::ArrayXd& x, Eigen::ArrayXd& dest)
 {
+    // std::cout << "point is in triangle? " <<  pointInTriangle(
+            // x(iPoint+0), x(iPoint+1),
+            // x(i+0), x(i+1),
+            // x(j+0), x(j+1),
+            // x(k+0), x(k+1)) << std::endl;
+    // std::cout << "x=" << x.transpose() << std::endl;
+    // printf("iPoint=%d, i=%d, j=%d, k=%d\n", iPoint, i, j, k);
     if(iPoint != i && iPoint !=j && iPoint != k
         && pointInTriangle(
             x(iPoint+0), x(iPoint+1),
@@ -151,14 +178,15 @@ void ElasticModel::computeCollisionPenaltyForce(
             x(j+0), x(j+1),
             x(k+0), x(k+1));
         if(d1 < d2 && d1 < d3) {
-            addCollisionPenaltyForce(iPoint, i, j, x, dest);
+            return addCollisionPenaltyForce(iPoint, i, j, x, dest);
         } else if(d2 < d3 && d2 < d1) {
-            addCollisionPenaltyForce(iPoint, i, k, x, dest);
+            return addCollisionPenaltyForce(iPoint, i, k, x, dest);
         }
         else {
-            addCollisionPenaltyForce(iPoint, j, k, x, dest);
+            return addCollisionPenaltyForce(iPoint, j, k, x, dest);
         }
     }
+    return 0.0;
 };
 
 void ElasticModel::computeCollisionPenaltyForceDifferential(
