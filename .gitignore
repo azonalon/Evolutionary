@@ -1,4 +1,5 @@
 literature/*
 build/*
-scripts/*
 dependencies/*
+scripts/*
+.clang_complete

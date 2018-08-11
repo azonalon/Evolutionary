@@ -1,4 +1,10 @@
 #include "physics/ElasticModel.hpp"
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/graphviz.hpp>
+#include <exception>
+#include <fstream>
+
+using namespace Eigen;
 static double c = 10000;
 
 double squarePointLineSegmentDistance(double px, double py,
@@ -33,10 +39,11 @@ bool pointInTriangle(double px, double py, double p0x, double p0y,
 
 // adds force resulting from point iPoint inside surface (surface is a line from
 // vertex i to j)
-double addCollisionPenaltyForce(
-    unsigned int iPoint, unsigned int i, unsigned int j,
+double addSelfCollisionPenaltyForce(
+    std::array<unsigned, 3> triplet,
     const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) {
 
+    unsigned& iPoint = triplet[0], i=triplet[1], j=triplet[2];
     double px = x(iPoint), py = x(iPoint+1);
     double p0x = x(i), p0y = x(i+1);
     double p1x = x(j), p1y = x(j+1);
@@ -76,9 +83,10 @@ double addCollisionPenaltyForce(
     return c*phi;
 }
 
-void addCollisionPenaltyForceDifferential(
-    unsigned int iPoint, unsigned int i, unsigned int j,
-    const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest) {
+void addSelfCollisionPenaltyForceDifferential(
+        std::array<unsigned, 3> triplet,
+        const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest) {
+    unsigned& iPoint = triplet[0], i=triplet[1], j=triplet[2];
     double px = x(iPoint), py = x(iPoint+1);
     double p0x = x(i), p0y = x(i+1);
     double p1x = x(j), p1y = x(j+1);
@@ -148,76 +156,158 @@ void addCollisionPenaltyForceDifferential(
 }
 
 
-double ElasticModel::computeCollisionPenaltyForce(
-    unsigned int iPoint, unsigned int i, unsigned int j, unsigned int k,
-    const Eigen::ArrayXd& x, Eigen::ArrayXd& dest)
+double ElasticModel::computeCollisionPenaltyForce(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest)
 {
-    // std::cout << "point is in triangle? " <<  pointInTriangle(
-            // x(iPoint+0), x(iPoint+1),
-            // x(i+0), x(i+1),
-            // x(j+0), x(j+1),
-            // x(k+0), x(k+1)) << std::endl;
-    // std::cout << "x=" << x.transpose() << std::endl;
-    // printf("iPoint=%d, i=%d, j=%d, k=%d\n", iPoint, i, j, k);
-    if(iPoint != i && iPoint !=j && iPoint != k
-        && pointInTriangle(
-            x(iPoint+0), x(iPoint+1),
-            x(i+0), x(i+1),
-            x(j+0), x(j+1),
-            x(k+0), x(k+1))) {
-        double d1 = squarePointLineSegmentDistance(
-            x(iPoint+0), x(iPoint+1),
-            x(i+0), x(i+1),
-            x(j+0), x(j+1));
-        double d2 = squarePointLineSegmentDistance(
-            x(iPoint+0), x(iPoint+1),
-            x(i+0), x(i+1),
-            x(k+0), x(k+1));
-        double d3 = squarePointLineSegmentDistance(
-            x(iPoint+0), x(iPoint+1),
-            x(j+0), x(j+1),
-            x(k+0), x(k+1));
-        if(d1 < d2 && d1 < d3) {
-            return addCollisionPenaltyForce(iPoint, i, j, x, dest);
-        } else if(d2 < d3 && d2 < d1) {
-            return addCollisionPenaltyForce(iPoint, i, k, x, dest);
-        }
-        else {
-            return addCollisionPenaltyForce(iPoint, j, k, x, dest);
+    double E = 0;
+    // first loop: object collision
+    for(unsigned i=0; i<x.size()/2; i++) {
+        double px=x[2*i + 0], py = x[2*i + 1];
+        for(auto& c: collisionObjects) {
+            if(c->boundingBox().contains(px, py)) {
+                // TODO: this always uses mass in x direction
+                E += c->computePenaltyForce(&x[2*i], &v[2*i], dt/M[2*i],&dest[2*i]);
+            }
         }
     }
-    return 0.0;
+    // for(auto& triplet: selfCollisionList) {
+    //     E += addSelfCollisionPenaltyForce(triplet, x, dest);
+    // }
+    return E;
 };
 
-void ElasticModel::computeCollisionPenaltyForceDifferential(
-    unsigned int iPoint, unsigned int i, unsigned int j, unsigned int k,
-    const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest)
-{
-    if(iPoint != i && iPoint !=j && iPoint != k
-        && pointInTriangle(
-            x(iPoint+0), x(iPoint+1),
-            x(i+0), x(i+1),
-            x(j+0), x(j+1),
-            x(k+0), x(k+1))) {
-        double d1 = squarePointLineSegmentDistance(
-            x(iPoint+0), x(iPoint+1),
-            x(i+0), x(i+1),
-            x(j+0), x(j+1));
-        double d2 = squarePointLineSegmentDistance(
-            x(iPoint+0), x(iPoint+1),
-            x(i+0), x(i+1),
-            x(k+0), x(k+1));
-        double d3 = squarePointLineSegmentDistance(
-            x(iPoint+0), x(iPoint+1),
-            x(j+0), x(j+1),
-            x(k+0), x(k+1));
-        if(d1 < d2 && d1 < d3) {
-            addCollisionPenaltyForceDifferential(iPoint, i, j, x, dx, dest);
-        } else if(d2 < d3 && d2 < d1) {
-            addCollisionPenaltyForce(iPoint, i, k, x, dest);
-        }
-        else {
-            addCollisionPenaltyForceDifferential(iPoint, j, k, x, dx, dest);
+void ElasticModel::populateSelfCollisionList(const Eigen::ArrayXd& x) {
+    selfCollisionList.clear();
+    for(unsigned l=0; l<m; l++){
+        unsigned int i=2*Te(l, 0), j=2*Te(l, 1), k=2*Te(l, 2);
+        for(unsigned n=0; n<m; n++){
+            if(n==l) {
+                continue;
+            }
+            for(unsigned jj=0; jj<3;jj++) {
+                unsigned int iPoint = 2*Te(n,jj);
+                if(iPoint != i && iPoint !=j && iPoint != k
+                    && pointInTriangle(
+                        x(iPoint+0), x(iPoint+1),
+                        x(i+0), x(i+1),
+                        x(j+0), x(j+1),
+                        x(k+0), x(k+1))) {
+                    double d1 = squarePointLineSegmentDistance(
+                        x(iPoint+0), x(iPoint+1),
+                        x(i+0), x(i+1),
+                        x(j+0), x(j+1));
+                    double d2 = squarePointLineSegmentDistance(
+                        x(iPoint+0), x(iPoint+1),
+                        x(i+0), x(i+1),
+                        x(k+0), x(k+1));
+                    double d3 = squarePointLineSegmentDistance(
+                        x(iPoint+0), x(iPoint+1),
+                        x(j+0), x(j+1),
+                        x(k+0), x(k+1));
+                    if(d1 < d2 && d1 < d3) {
+                        selfCollisionList.push_back({iPoint, i , j});
+                    } else if(d2 < d3 && d2 < d1) {
+                        selfCollisionList.push_back({iPoint, i , k});
+                    }
+                    else {
+                        selfCollisionList.push_back({iPoint, j , k});
+                    }
+                }
+            }
         }
     }
+
+}
+
+void ElasticModel::computeCollisionPenaltyForceDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest)
+{
+    for(unsigned i=0; i<x.size()/2; i++) {
+        double px=x[2*i + 0], py = x[2*i + 1];
+        for(CollisionObject* c: collisionObjects) {
+            if(c->boundingBox().contains(px, py)) {
+                c->computePenaltyForceDifferential(&x[2*i], &dx[2*i], &dest[2*i]);
+            }
+        }
+    }
+    // for(auto& triplet: selfCollisionList) {
+    //     addSelfCollisionPenaltyForceDifferential(triplet, x, dx, dest);
+    // }
 };
+
+// typedef boost::graph_traits<Graph>::edge_iterator edge_iterator;
+
+struct VertexProperties {
+    bool visited=false;
+};
+
+typedef boost::adjacency_list<boost::listS, boost::vecS, boost::directedS,
+                            VertexProperties> Graph;
+
+
+void ElasticModel::collisionPrecompute(const std::vector<double>& vertices) {
+    Graph g;
+    // typedef std::pair<unsigned, unsigned> Edge;
+    // std::multimap<unsigned, unsigned> adjacentTriangles;
+    for(unsigned l=0; l<m; l++){
+        std::vector<bool> isAdjacent(3, false);
+        // std::array<Edge, 3> edges {
+        //     Edge{Te(l, 0), Te(l, 1)},
+        //     Edge{Te(l, 1), Te(l, 2)},
+        //     Edge{Te(l, 2), Te(l, 0)}
+        // };
+        for(unsigned u=0; u<m; u++){
+            if(u==l) continue;
+            for(int i=0; i<3; i++) {
+                if(
+                    (Te(l, i) == Te(u, 0) && Te(l, (i+1)%3) == Te(u, 1)) ||
+                    (Te(l, i) == Te(u, 1) && Te(l, (i+1)%3) == Te(u, 0)) ||
+                    (Te(l, i) == Te(u, 1) && Te(l, (i+1)%3) == Te(u, 2)) ||
+                    (Te(l, i) == Te(u, 2) && Te(l, (i+1)%3) == Te(u, 1)) ||
+                    (Te(l, i) == Te(u, 2) && Te(l, (i+1)%3) == Te(u, 0)) ||
+                    (Te(l, i) == Te(u, 0) && Te(l, (i+1)%3) == Te(u, 2))
+                ) {
+                    isAdjacent[i] = true;
+                }
+            }
+        }
+        auto addEdge = [&](int i, int j, int k) {
+            const double& px0 = vertices[2*Te(l, i) + 0];
+            const double& py0 = vertices[2*Te(l, i) + 1];
+            const double& px1 = vertices[2*Te(l, j) + 0];
+            const double& py1 = vertices[2*Te(l, j) + 1];
+            const double& px2 = vertices[2*Te(l, k) + 0];
+            const double& py2 = vertices[2*Te(l, k) + 1];
+            double s = px2*(-py0 + py1) + px1*(py0 - py2) + px0*(-py1 + py2);
+            if(s < 0) {
+                boost::add_edge(Te(l, j), Te(l, k), g);
+            } else {
+                boost::add_edge(Te(l, k), Te(l, j), g);
+            }
+        };
+        if(isAdjacent[0] == false) {
+            addEdge(2, 0, 1);
+        }
+        if(isAdjacent[1] == false) {
+            addEdge(0, 1, 2);
+        }
+        if(isAdjacent[2] == false) {
+            addEdge(1, 2, 0);
+        }
+    }
+    std::ofstream of1("test1.dot");
+    boost::write_graphviz(of1, g);
+    auto ei = boost::vertices(g);
+    for(auto it = ei.first; it != ei.second; it++) {
+        auto chain = *it;
+        if(!g[chain].visited) {
+            std::vector<unsigned int> surface;
+            do {
+                g[chain].visited=true;
+                surface.push_back(chain);
+                auto adjacent = boost::adjacent_vertices(chain, g);
+                chain = *adjacent.first;
+            }
+            while(!g[chain].visited);
+            surfaces.push_back(surface);
+        }
+    }
+}

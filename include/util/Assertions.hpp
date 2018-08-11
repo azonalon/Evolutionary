@@ -4,16 +4,21 @@
 #pragma once
 
 #define assertEqualsTest(a, e, epsilon) _assertEqualsTest(__FILE__, __func__, __LINE__, a, e, epsilon)
+#define assertArrayEquals(a, e, epsilon) _assertArrayEquals(__FILE__, __func__, __LINE__, a, e, epsilon)
 // #define assertTrueTest(a, e, epsilon)   _assertTrueTest(__FILE__, __func__, __LINE__, a, e, epsilon)
 
-inline void assertArrayEquals(Eigen::MatrixXd b, Eigen::MatrixXd a, double delta) {
-    if(!a.isApprox(b, delta)) {
-        std::cout
-        << "Expected Array:\n"
-        << a << std::endl
+inline bool _assertArrayEquals(const char *file, const char *function, int line,
+                                Eigen::MatrixXd b, Eigen::MatrixXd a, double delta) {
+    if(a.isApprox(b, delta)) {
+		printf("%s, line %d: check passed\n", file, line);
+		return true;
+    } else {
+		printf("%s, line %d: Actual Array is not within %g of expected value.\n", file, line, delta);
+        std::cout << a << std::endl
         << "Got Array\n"
         << b << std::endl;
-        assert(false && "AssertArrayEquals fail.");
+        throw std::runtime_error("Assertion error.");
+		return false;
     }
 }
 

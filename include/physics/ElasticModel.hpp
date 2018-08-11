@@ -3,7 +3,9 @@
 #include <Eigen/Dense>
 #include "ImplicitODESolver.hpp"
 #include "InvertibleNeoHookeanModel.hpp"
+#include "CollisionObjects.hpp"
 #include <Eigen/StdVector>
+#include <map>
 /**
  * Finite Element elasticity model.
  */
@@ -16,6 +18,9 @@ public:
     Eigen::Matrix2d temp2x2A, temp2x2B, temp2x2P, temp2x2D, H, P, F, dF, dP;
     const Eigen::Matrix2d id  =  Eigen::Matrix2d::Identity();
     const Eigen::Matrix2d nId = -Eigen::Matrix2d::Identity();
+    std::vector<std::vector<unsigned int>> surfaces;
+    std::vector<std::array<unsigned, 3>> selfCollisionList;
+
     enum ElasticModelType {
         NEOHOOKEAN,
         VENANTKIRCHHOFF,
@@ -23,6 +28,7 @@ public:
     };
 
     double invertibleEpsilon = 0.3;
+    std::vector<CollisionObject*> collisionObjects;
 
     ElasticModelType model = NEOHOOKEAN;
     InvertibleNeoHookeanModel neo;
@@ -38,13 +44,9 @@ public:
     unsigned vertexCount() {
         return n/2;
     }
-    static double computeCollisionPenaltyForce(
-        unsigned int iPoint,unsigned int  i, unsigned int j,unsigned int  k,
-        const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
+    double computeCollisionPenaltyForce(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
 
-    static void computeCollisionPenaltyForceDifferential(
-        unsigned int iPoint,unsigned int  i, unsigned int j,unsigned int  k,
-        const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
+    void computeCollisionPenaltyForceDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
 
     // /**
     //  * Generates a finite element elastic model solver.
@@ -66,14 +68,14 @@ public:
      */
     template<class ...Ts>
     ElasticModel(const std::vector<double>& vertices, const std::vector<std::array<unsigned int,3>>& triangles,
-                const std::vector<double>& k, const std::vector<double>& nu, const std::vector<double>& M,
+                const std::vector<double>& _mu, const std::vector<double>& _lambda, const std::vector<double>& M,
                 ElasticModelType model, double eps=0.5):
                         ImplicitODESolver(vertices.size(), M), n(vertices.size()), m(triangles.size()),
                         Bm(m), model(model), neo(eps), Te(m, 3), W(m), mu(m), lambda(m)
                         {
 
-        assert(triangles.size() == k.size());
-        assert(nu.size() == k.size());
+        assert(triangles.size() == _mu.size());
+        assert(_mu.size() == _lambda.size());
         assert(M.size() == vertices.size());
         assert(vertices.size() % 2 == 0);
         for(unsigned i=0; i<m; i++) {
@@ -82,8 +84,13 @@ public:
                 triangles[i][1],
                 triangles[i][2]
             ;
+            this->mu[i] = _mu[i];
+            this->lambda[i] = _lambda[i];
+            // lambda[l] = K[l]*nu[l]/(1+nu[l])/(1-2*nu[l]);
+            // mu[l] = K[l]/2/(1+nu[l]);
         }
-        precompute(vertices, k, nu);
+        precompute(vertices);
+        collisionPrecompute(vertices);
         for(unsigned i=0; i<vertices.size(); i++) {
             x0(i) = vertices[i];
             x1(i) = vertices[i];
@@ -91,9 +98,9 @@ public:
         }
     }
 
+    void collisionPrecompute(const std::vector<double>& vertices);
 
-    void precompute(const std::vector<double>& vertices,
-                    const std::vector<double>& K, const std::vector<double>& nu) {
+    void precompute(const std::vector<double>& vertices) {
         for(unsigned l=0; l<m; l++){
             unsigned int i=2*Te(l, 0), j=2*Te(l, 1), k=2*Te(l, 2);
             temp2x2A <<
@@ -102,8 +109,6 @@ public:
 
             W[l] = std::abs(temp2x2A.determinant()/2.0);
             assert(Math::invert(temp2x2A, Bm[l]));
-            lambda[l] = K[l]*nu[l]/(1+nu[l])/(1-2*nu[l]);
-            mu[l] = K[l]/2/(1+nu[l]);
         }
     }
 
@@ -126,19 +131,6 @@ public:
             temp2x2B = temp2x2A * Bm[l].transpose();
             addForceMatrixToVector(temp2x2B, dest, i, j, k, l);
 
-            // TODO: collision testing, basically you should provide a set points,
-            // this triangle is possibly colliding with. for now we check every
-            // point (brute force)
-            // TODO: this does not work if one point is contained in multiple triangles
-            for(unsigned n=0; n<m; n++){
-                if(n==l) {
-                    continue;
-                }
-                for(unsigned jj=0; jj<3;jj++) {
-                    unsigned int iPoint = 2*Te(n,jj);
-                    // stressEnergy += computeCollisionPenaltyForce(iPoint, i, j, k, x, dest);
-                }
-            }
         }
         return stressEnergy;
     }
@@ -174,25 +166,26 @@ public:
                 neo.computeStressDifferential(F, dF, lambda[l], mu[l], dP);
             temp2x2B = dP*Bm[l].transpose();
             addForceMatrixToVector(temp2x2B, dest, i, j, k, l);
-            for(unsigned n=0; n<m; n++){
-                if(n==l) {
-                    continue;
-                }
-                for(unsigned jj=0; jj<3;jj++) {
-                    unsigned int iPoint = 2*Te(n,jj);
-                    // computeCollisionPenaltyForceDifferential(iPoint, i, j, k, x, dx, dest);
-                }
-            }
         }
     }
 
+    void populateSelfCollisionList(const Eigen::ArrayXd& x);
+
     virtual double computeForce(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) override {
-        return computeElasticForce(x, dest);
+        return computeElasticForce(x, dest) + computeCollisionPenaltyForce(x, dest);
     }
     virtual void computeForceDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx,
                                                Eigen::ArrayXd& dest) override {
         computeElasticForceDifferential(x, dx, dest);
+        computeCollisionPenaltyForceDifferential(x, dx, dest);
+        return;
     }
+
+
+    virtual void precomputeStep(const Eigen::ArrayXd& x) override {
+        // populateSelfCollisionList(x);
+        // TODO actually precompute stress tensors etc.
+    };
 
     inline static double normP2Squared(Eigen::Matrix2d& m) {
         return

@@ -11,14 +11,16 @@
 class ImplicitODESolver {
 public:
     virtual double computeForce(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest)=0;
+    virtual void precomputeStep(const Eigen::ArrayXd& x)=0;
     virtual void computeForceDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest)=0;
+    unsigned counter = 0;
     // virtual void timeStepFinished()=0;
     double dampPotential;
     int iNewton=0;
 
     Eigen::ArrayXd dn, g, x0, x1, x2, v, xHat,
                 temp1, temp2, M, MI, fExt,
-                xAlpha, gConst, r, p;
+                xAlpha, gConst, r, p, fr;
     double dG, dPhi, dX, phi, dN;
     double kDamp=0.0;
     double dt=0.1;
@@ -94,9 +96,9 @@ public:
     }
 
 
-    ImplicitODESolver(int n, const std::vector<double>& masses) :
+    ImplicitODESolver(unsigned n, const std::vector<double>& masses) :
         dn(n), g(n),  x0(n), x1(n), x2(n), v(n), xHat(n),
-        temp1(n), temp2(n),M(n), MI(n), fExt(n),xAlpha(n), gConst(n), r(n), p(n)
+        temp1(n), temp2(n),M(n), MI(n), fExt(n),xAlpha(n), gConst(n), r(n), p(n), fr(n)
     // Eigen::ArrayXd dn, g, x0, x1, x2, v, xHat,
     //             temp1, temp2, M, MI, fExt,
     //             xAlpha, gConst, r, p;
@@ -104,7 +106,7 @@ public:
         assert(n == masses.size());
 
         dn=0; g=0; x0=0; x1=0; x2=0; v=0; xHat=0;
-        temp1=0; temp2=0; M=1; MI=1; fExt=0;
+        temp1=0; temp2=0; M=1; MI=1; fExt=0; fr=0;
         xAlpha=0; gConst=0; r=0; p=0;
         int i=0;
         for(double m: masses) {
@@ -216,7 +218,7 @@ public:
         return 0;
     }
 
-    double zoom(double lo, double philo, double dPhilo,
+    inline double zoom(double lo, double philo, double dPhilo,
                       double hi, double phihi, double dPhihi,
                       double phiS, double dPhiS, double c1, double c2,
                       double alpha0, double phi0, double dPhi0,
@@ -338,13 +340,16 @@ public:
 
     void computeForwardEulerStep(Eigen::ArrayXd& x2,Eigen::ArrayXd& x1,Eigen::ArrayXd& x0,
                                  const Eigen::ArrayXd& fExt) {
+        assert(counter == 0 || v.isApprox((x0-x1)/dt, 1e-25));
+        counter++;
         x2 = x1;
         x1 = x0;
-        x0 = 2*x1-x2;
+        fr = 0;
+        x0 = x0 + dt*v; // = dt*v + x0
         temp1 = fExt*MI;
         x0 = dt*dt*temp1 + x0;
-        temp1 =  (x1 - x2)/dt;
-        DERROR("||v||=%g\n", sqrt((temp1*temp1).sum()));
+        // temp1 =  (x1 - x2)/dt;
+        // DERROR("||v||=%g\n", sqrt((temp1*temp1).sum()));
     }
 
     void implicitEulerStep() {
@@ -355,8 +360,11 @@ public:
         DERROR("Newton iteration start. dG=%g\n", dG);
         // std::cout << "x2=" <<  x2 << std::endl;
         // step forward and set the initial guess
+
+        // compute initital guess
         computeForwardEulerStep(x2, x1, x0, fExt);
         xHat = x0;
+        precomputeStep(x0);
 
         iNewton=0;
         while(iNewton <= 20) {

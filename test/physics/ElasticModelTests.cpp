@@ -7,13 +7,13 @@
 using namespace Eigen;
 
 class ElasticModelTests {
+    static constexpr double mu = 0.375939849624060;
+    static constexpr double lambda  = 0.729765590446705;
 public:
     static void conjugateGradient() {
-        double nuV = 0.33;
-        double kV =  1.0;
         std::vector<double> vertices = {0, 0, 0, 1, 1, 0};
-        std::vector<double> k = {kV};
-        std::vector<double> nu = {nuV};
+        std::vector<double> k = {mu};
+        std::vector<double> nu = {lambda};
         std::vector<double> M = {1,1,1,1,1,1};
         std::vector<std::array<unsigned int,3>> indices = {{0,1,2}};
         ElasticModel em(vertices, indices, k, nu, M,
@@ -63,8 +63,8 @@ public:
     static void compute() {
         std::vector<double> vertices1 =  {0, 0, 0, 1, 1, 0};
         std::vector<double> vertices2 =  {0, 0, 0, 1, 1, 1};
-        std::vector<double> k =   {1.0};
-        std::vector<double> nu =   {0.33};
+        std::vector<double> k =   {mu};
+        std::vector<double> nu =   {lambda};
         std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}};
         std::vector<double> M =   {1,1,1,1,1,1};
         ElasticModel em1 (vertices1, indices, k, nu, M,
@@ -74,8 +74,8 @@ public:
         Matrix2d Bm1; Bm1 << -1, -1,  0, 1;
         Matrix2d Bm2; Bm2 <<  0, -1, -1, 1;
         assertArrayEquals(Bm1, em1.Bm[0], 1e-12);
-        assertEquals(em1.lambda[0], 0.729766, 1e-5);
-        assertEquals(em1.mu[0], 0.37594, 1e-5);
+        assertEqualsTest(em1.lambda[0], 0.729766, 1e-5);
+        assertEqualsTest(em1.mu[0], 0.37594, 1e-5);
         assertArrayEquals(em2.Bm[0], Bm2, 1e-12);
         for(unsigned i=0; i<vertices1.size(); i++) {
             em1.x0(i) = vertices1[i];
@@ -83,10 +83,10 @@ public:
         }
         Matrix2d id; id << 1, 0, 0, 1;
         em1.venantPiolaStress(id, 1, 1, em1.temp2x2P);
-        assertEquals(0, em1.temp2x2P.norm(), 0);
+        assertEqualsTest(0, em1.temp2x2P.norm(), 0);
 
         em1.computeElasticForce(em1.x0, em1.g);
-        assertEquals(0, (em1.g*em1.g).sum(), 0);
+        assertEqualsTest(0, (em1.g*em1.g).sum(), 0);
     }
     //
     //
@@ -94,8 +94,8 @@ public:
         std::vector<double> vertices1 =   {0, 0, 0, 1, 1, 0};
         // std::vector<double> vertices2 =   {0, -1, 2, 2, 1, -1};
         std::vector<double> vertices2 =   {0, 0.7, 0, 1, 1, 0};
-        std::vector<double> k =   {1.0};
-        std::vector<double> nu =   {0.33};
+        std::vector<double> k =   {mu};
+        std::vector<double> nu =   {lambda};
         std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}};
         std::vector<double> M =   {1,1,1, 1,1,1};
         ElasticModel em(vertices1, indices, k, nu, M,
@@ -110,12 +110,12 @@ public:
 
 
         em.computeElasticForce(em.x1, em.g);
-        assertEquals(0, (em.g*em.g).sum(), 0);
+        assertEqualsTest(0, (em.g*em.g).sum(), 0);
 
         psi = em.computeElasticForce(em.x0, em.g);
         f << -0.0239938, -0.0693498, 0.0394737, 0.0466718, -0.0154799, 0.022678;
         assertArrayEquals(em.g, f, 1e-4);
-        assertEquals(psi, 0.0623878, 1e-4);
+        assertEqualsTest(psi, 0.0623878, 1e-4);
 
         em.computeElasticForceDifferential(em.x0, dx, em.g);
         f << 0.148153, -0.125785, 0.0125663, 0.0110128, -0.16072, 0.114772 ;
@@ -130,7 +130,7 @@ public:
         psi = em1.computeElasticForce(em1.x0, em1.g);
         f << -1.90296, -2.16612, 1.46365, 2.03454, 0.439309, 0.131579;
         assertArrayEquals(em1.g, f, 1e-4);
-        assertEquals(psi, 0.451295, 1e-4);
+        assertEqualsTest(psi, 0.451295, 1e-4);
 
         em1.computeElasticForceDifferential(em1.x0, dx, em1.g);
         f << 3.0101, 1.39375, -2.58304, -1.6322, -0.427058, 0.238451;
@@ -153,8 +153,8 @@ public:
         std::vector<double>vertices1 =  {0, 0, 0, 1, 1, 1};
         // std::vector<double>vertices2 =  {0, -1, 2, 2, 1, -1};
         std::vector<double>vertices2 =  {1.2, 1.1, 0.1, 1.05, 1.06, 1.07};
-        std::vector<double>k =  {1.0};
-        std::vector<double>nu =  {0.33};
+        std::vector<double>k =  {mu};
+        std::vector<double>nu =  {lambda};
         std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}};
         std::vector<double> M =  {1,1,1,1,1,1};
         ArrayXd dx(vertices1.size()), f(vertices1.size());
@@ -171,7 +171,7 @@ public:
 
         psi = em.computeElasticForce(em.x0, em.g);
         f <<    -0.046988, -4.7444, 0.420897, -0.681655, -0.373909,  5.42606;
-        assertEquals(1.68113, psi, 1e-4);
+        assertEqualsTest(1.68113, psi, 1e-4);
         assertArrayEquals(em.g, f, 1e-4);
         double t[6][6] = {{-0.356551, 0.646852, 0.506009, -4.82607, -0.149458,
                           4.17922}, {0.646852, -6.77856, 4.19242, -0.872466, -4.83927,
@@ -197,7 +197,7 @@ public:
             dx(i) = 1.0;
             em.computeElasticForceDifferential(em.x0, dx, em.g);
             for(int j=0; j<6;j++) {
-                assertEquals(t[i][j], em.g(j), 1e-4);
+                assertEqualsTest(t[i][j], em.g(j), 1e-4);
                 // System.out.format("%g %g %d %d\n", t[i][j], em.g.get(j, 0), i, j);
                 // m(i, j) = em.g(j);
             }
@@ -244,11 +244,9 @@ public:
     static void backwardEulerTest(ElasticModel::ElasticModelType modelType,
                                   double firstVertexYOffset, Eigen::ArrayXd& finalState,
                                   double eps=0.3) {
-        double nuV = 0.33;
-        double kV =  1.0;
         std::vector<double> vertices =  {0, 0, 0, 1, 1, 0};
-        std::vector<double> k =  {kV};
-        std::vector<double> nu =  {nuV};
+        std::vector<double> k =  {mu};
+        std::vector<double> nu =  {lambda};
         std::vector<double> M =  {1,1,1,1,1,1};
         std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}};
         ElasticModel em(vertices, indices, k, nu, M,
@@ -281,11 +279,11 @@ public:
     //
     //
     // void backwardEulerTestTwoTriangle() {
-    //     double nuV = 0.33;
-    //     double kV =  1.0;
+    //     double lambda = 0.33;
+    //     double mu =  1.0;
     //     std::vector<double> vertices =  {0, 0, 0, 1, 1, 0, 1, 1};
-    //     std::vector<double> k =  {kV, kV};
-    //     std::vector<double> nu =  {nuV, nuV};
+    //     std::vector<double> k =  {mu, mu};
+    //     std::vector<double> nu =  {lambda, lambda};
     //     std::vector<double> M =  {1,1,1,1,1,1,1, 1};
     //     std::vector<std::array<unsigned int,3>>indices =  {{0,1,2}, {1, 2, 3}};
     //     ElasticModel em = new ElasticModel(vertices, indices, k, nu, M);
@@ -381,21 +379,21 @@ public:
     //
     //
     // void ball() {
-    //     double nuV = 0.3;
-    //     double kV =  1000.0;
-    //     ballSimulation(ElasticModel.INVERTIBLE_NEOHOOKEAN, kV, nuV);
+    //     double lambda = 0.3;
+    //     double mu =  1000.0;
+    //     ballSimulation(ElasticModel.INVERTIBLE_NEOHOOKEAN, mu, lambda);
     // }
     //
     //
     // void triangleInversion() {
-    //     double nuV = 0.3;
-    //     double kV =  0.5;
+    //     double lambda = 0.3;
+    //     double mu =  0.5;
     //     try {
     //         std::vector<double> vertices =  {0, 0, 1, 0, 0, 1};
     //         std::vector<std::array<int,3>>indices =  {{0,1,2}};
     //
-    //         std::vector<double> k =  {kV} ;
-    //         std::vector<double> nu =  {nuV} ;
+    //         std::vector<double> k =  {mu} ;
+    //         std::vector<double> nu =  {lambda} ;
     //         std::vector<double> M =  {1,1,1,1,1,1};
     //         ElasticModel em = new ElasticModel(vertices, indices,
     //                                            k, nu, M,
@@ -453,7 +451,7 @@ public:
     //
     // }
     //
-    // void ballSimulation(int model, double kV, double nuV) {
+    // void ballSimulation(int model, double mu, double lambda) {
     //     try {
     //         Vector<double[]> vertices = new Vector<double[]>();
     //         Vector<int[]> indices = new Vector<int[]>();
@@ -463,8 +461,8 @@ public:
     //         std::vector<double> k = new double[indices.size()] ;
     //         std::vector<double> nu = new double[indices.size()] ;
     //         std::vector<double> M = new double[vertices.size()*2] ;
-    //         Arrays.fill(k, kV);
-    //         Arrays.fill(nu, nuV);
+    //         Arrays.fill(k, mu);
+    //         Arrays.fill(nu, lambda);
     //         Arrays.fill(M, 1);
     //         ElasticModel em = new ElasticModel(flatten(vertices.toArray(new double[0][])),
     //                                            indices.toArray(new int[0][]),
@@ -510,11 +508,11 @@ public:
     // }
     //
     // void simpleForwardEuler() {
-    //     double nuV = 0.33;
-    //     double kV =  0.01;
+    //     double lambda = 0.33;
+    //     double mu =  0.01;
     //     std::vector<double> vertices =  {0, 0, 0, 1, 1, 0};
-    //     std::vector<double> k =  {kV};
-    //     std::vector<double> nu =  {nuV};
+    //     std::vector<double> k =  {mu};
+    //     std::vector<double> nu =  {lambda};
     //     std::vector<std::array<int,3>>indices =  {{0,1,2}};
     //     std::vector<double> M =  {1,1,1,1,1,1};
     //     ElasticModel em = new ElasticModel(vertices, indices, k, nu, M);
