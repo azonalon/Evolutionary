@@ -13,8 +13,8 @@ public:
     // virtual double computeDistanceGradient(const double*, double*) const  =0;
     // virtual void computeDistanceGradientDifferential(const double* x, const double* dx, double* df) const=0;
     // computes force into f, friction into fr, all at position x
-    virtual double computePenaltyForce(const double* x, double* v, double dtbym, double* f) const  =0;
-    virtual void computePenaltyForceDifferential(const double* x, const double* dx, double* df) const=0;
+    virtual double computePenaltyGradient(const double* x, double* v, double dtbym, double* f) const  =0;
+    virtual void computePenaltyGradientDifferential(const double* x, const double* dx, double* df) const=0;
 };
 
 class Rectangle: public CollisionObject{
@@ -25,6 +25,6 @@ public:
     const BoundingBox& boundingBox() const override;
     // double computeDistanceGradient(const double* , double*) const override;
     // void computeDistanceGradientDifferential(const double*, const double*, double*) const override;
-    double computePenaltyForce(const double* , double*, double dtbym, double*) const override;
-    void computePenaltyForceDifferential(const double*, const double*, double*) const override;
+    double computePenaltyGradient(const double* , double*, double dtbym, double*) const override;
+    void computePenaltyGradientDifferential(const double*, const double*, double*) const override;
 };

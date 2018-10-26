@@ -1,18 +1,53 @@
 #pragma once
 #include <Eigen/Dense>
-#include "util/Debug.hpp"
 #include "util/Math.hpp"
 #include "util/Assertions.hpp"
 #include <cmath>
 #include <stdexcept>
 #include <climits>
 #include <vector>
+#include <cppoptlib/problem.h>
+#include <cppoptlib/solver/bfgssolver.h>
+
+#define EVOLUTIONARY_DEBUG false
+#include "util/Debug.hpp"
+static constexpr bool DEBUG_CHECK_DERIVATIVES=false;
 
 class ImplicitODESolver {
 public:
-    virtual double computeForce(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest)=0;
+    class ImplicitEulerStep: public cppoptlib::Problem<double> {
+    public:
+        ImplicitODESolver& s;
+        ImplicitEulerStep(ImplicitODESolver& s): s(s) { };
+        double value(const Eigen::VectorXd& x) override {
+            s.g = 0;
+            return s.computeOptimizeGradient(x, s.g);
+        }
+        void gradient(const Eigen::VectorXd& x, Eigen::VectorXd& dest) override {
+            Eigen::ArrayXd a(dest.size());
+            a = 0;
+            s.computeOptimizeGradient(x, a);
+            dest = a;
+        }
+        void hessian(const Eigen::VectorXd& x, Eigen::MatrixXd& dest) override {
+            Eigen::ArrayXd a(x.size());
+            for(unsigned i=0; i<dest.rows(); i++) {
+                a = 0;
+                a[i] = 1;
+                s.g = 0;
+                s.computeOptimizeDifferential(a, s.g);
+                for(unsigned j=0; j<dest.cols(); j++) {
+                    dest(i,j) = s.g(j);
+                }
+            }
+        }
+    };
+    std::function<void(ImplicitODESolver*, double)> lineSearchHook = [](auto s, double alpha) {return;};
+    virtual double computeGradient( const Eigen::ArrayXd& x, Eigen::ArrayXd& dest)=0;
     virtual void precomputeStep(const Eigen::ArrayXd& x)=0;
-    virtual void computeForceDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest)=0;
+    virtual void computeDifferential(const Eigen::ArrayXd& x, 
+                                          const Eigen::ArrayXd& dx, 
+                                          Eigen::ArrayXd& dest)=0;
     unsigned counter = 0;
     // virtual void timeStepFinished()=0;
     double dampPotential;
@@ -24,7 +59,7 @@ public:
     double dG, dPhi, dX, phi, dN;
     double kDamp=0.0;
     double dt=0.1;
-    double newtonAccuracy = 1e-5;
+    double newtonAccuracy = 0.001;
 
     void conjugateGradientSolve(const Eigen::ArrayXd& rhs, const Eigen::ArrayXd& initialGuess,
                                       std::function<void(const Eigen::ArrayXd&,Eigen::ArrayXd&)>
@@ -61,17 +96,30 @@ public:
             result = result + p*alpha;
         }
     }
+    void computeOptimizeDifferential(const Eigen::ArrayXd& dx, Eigen::ArrayXd& df) {
+            temp2 = 0;
+            computeDifferential(x0, dx, df);
+            computeDifferential(x1, dx, temp2);
+            df +=  kDamp/dt*temp2;
+            temp2 = M*dx;
+            df += temp2/dt/dt;
+    }
 
     void computeNewtonDirection(const Eigen::ArrayXd& g, Eigen::ArrayXd& dn) {
-        conjugateGradientSolve(g, g, [&](auto& dx, auto& lhs) -> void {
-            assert((x0*x0).sum() > 0);
-            assert((x1*x1).sum() > 0);
-            computeForceDifferential(x0, dx, lhs);
-            computeForceDifferential(x1, dx, temp2);
-            lhs = lhs - kDamp/dt*temp2;
-            temp2 = M*dx;
-            lhs += temp2/dt/dt;
-        }, dn);
+        // conjugateGradientSolve(g, g, [&](const auto& dx, auto& lhs) -> void {
+        //     lhs = 0;
+        //     temp2 = 0;
+        //     computeForceDifferential(x0, dx, lhs);
+        //     computeForceDifferential(x1, dx, temp2);
+        //     lhs = lhs - kDamp/dt*temp2;
+        //     temp2 = M*dx;
+        //     lhs += temp2/dt/dt;
+        // }, dn);
+        conjugateGradientSolve(g, g, [&](const auto& dx, auto& df) {
+            df=0;
+            computeOptimizeDifferential(dx, df);
+        }
+            , dn);
         dn = -dn;
     };
 
@@ -80,18 +128,23 @@ public:
     }
 
     double computeOptimizeGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) {
-        double energy = computeForce(x, dest);
+
+        double energy = 0;
+
+        v = (x - x1)/dt;
+        temp2 = 0;
+        computeDifferential(x1, v, temp2);
+        dampPotential = (v*temp2).sum()*kDamp/2*dt;
+        energy += dampPotential;
+        dest = kDamp*temp2;
+
+        energy += computeGradient(x, dest);
 
         temp1 = x - xHat;
         temp2 = M * temp1;
-        energy += (temp1*temp2).sum()/2/dt/dt;
-        dest = temp2/(dt*dt) - dest;
-        v = (x - x1)/dt;
-        computeForceDifferential(x1, v, temp2);
-        dampPotential = -(v*temp2).sum()*kDamp/2*dt;
-        energy += dampPotential;
-        // DERROR("Compute Gradient: damping dampPotential=%g", dampPotential);
-        dest = -kDamp*temp2 + dest;
+        energy += (temp1*temp2).sum()/2.0/dt/dt;
+        dest += temp2/(dt*dt);
+
         return energy;
     }
 
@@ -123,6 +176,7 @@ public:
         double alphaMax  = 1e3;
         double l = 1e3;
 
+        g = 0;
         phi = computeOptimizeGradient(x0, g);
         dG = (g*g).sum();
         if(dG < newtonAccuracy) {
@@ -136,6 +190,7 @@ public:
         double dPhiSq = dPhi*std::abs(dPhi);
         if(dPhiSq < -k*dN*dG) {
             // dN is suitable
+            DERROR("dn is suitable! dPhi*abs(dPhi)=%g, dN*dG=%g\n", dPhiSq, dN*dG);
             // log.printf(DEBUg, "dn is suitable! dNdG=%g, dn dg=%g\n", dNdG, dN*dg);
         }
         else if(dPhiSq > k*dN*dG) {
@@ -156,9 +211,10 @@ public:
             dN = l;
         }
         alpha = strongWolfeLineSearch(alpha, alphaMax);
+        // lineSearchHook(this, alpha);
         x0 = x0 + alpha*dn;
         dG = (g*g).sum();
-        return dG;
+        return dG*(1-alpha)*2;
     }
 
     double strongWolfeLineSearch(double alpha, double alphaMax) {
@@ -180,7 +236,7 @@ public:
             computePhiDPhi(alpha1);
             phi1 = phi;
             dPhi1 = dPhi;
-            if(std::abs(phi) < 1e-20 && std::abs(dPhi) < 1e-20) return alpha1;
+            if(std::abs(phi) < 1e-2 && std::abs(dPhi) < 1e-2) return alpha1;
             if(phi1 > phiS + c1*alpha1*dPhiS || (j>1 && phi1 >= phi0)) {
                 DERROR("Case phi is too big: phiS=%g, dPhi=%g, phiWolfe=%g\n",
                                   phiS, dPhiS, phiS + c1*alpha*dPhiS);
@@ -215,7 +271,7 @@ public:
         }
         DMESSAGE("Line search end.");
         throw std::runtime_error("Line Search did not end");
-        return 0;
+        return 1;
     }
 
     inline double zoom(double lo, double philo, double dPhilo,
@@ -262,6 +318,7 @@ public:
             alpha1 = alpha;
             j++;
         }
+        lineSearchHook(this, -1);
         throw std::runtime_error("Zoom did not converge");
         return -1;
     }
@@ -284,7 +341,7 @@ public:
             x = b + 2*c*d;
         }
         assertTrue("Interpolated alpha is not in interval.",
-                             x <= std::max(a, b) && x >= std::min(a, b));
+                    x <= std::max(a, b) && x >= std::min(a, b));
         return x;
     }
 
@@ -296,56 +353,19 @@ public:
 
     void computePhiDPhi(double alpha)  {
         xAlpha = alpha*dn + x0;
+        g = 0;
         phi = computeOptimizeGradient(xAlpha, g);
         // dPhi = dot(dn, g)/normP2(dn);
         computeDPhi(g, dn);
     }
 
-    // void scanLineToFile(double alphaMax, int n, std::string filename) {
-    //     assert(alphaMax >0);
-    //     try {
-    //         Path path =  Paths.get("build/test-results/physics/ScanLine");
-    //         if(Files.notExists(path)){
-    //                 Files.createDirectories(path);
-    //         }
-    //         path = path.resolve(filename);
-    //         BufferedWriter writer = Files.newBufferedWriter(path);
-    //         writer.write(String.format("#alpha phi dPhi1 dPhi2\n"));
-    //         double phi1 = phi;
-    //         double phiMin = phi;
-    //         double dPhiMin = dPhi;
-    //         double alphaMin = 0;
-    //         double step = alphaMax/n;
-    //         computePhiDPhi(-alphaMax - step);
-    //         for(double alpha=-alphaMax; alpha<alphaMax; alpha+=step) {
-    //             phi1 = phi;
-    //             computePhiDPhi(alpha);
-    //             if(phiMin > phi) {
-    //                 dPhiMin = dPhi;
-    //                 phiMin = phi;
-    //                 alphaMin = alpha;
-    //             }
-    //             writer.write(String.format("% 8g % 12.8f % 12.8f % 12.8f\n",
-    //                          alpha, phi, dPhi, (phi - phi1)/step));
-    //         }
-    //         computePhiDPhi(0);
-    //         DERROR("Line Scan min value: alphaMin=%4.4f,"+
-    //                              " phiMin=%g, dPhiMin=%g\n", alphaMin, phiMin, dPhiMin);
-    //         // DMESSAGE("Origin and direction" + x0 + dn);
-    //         writer.close();
-    //     } catch(IOException e) {
-    //         throw new RuntimeException("Could not write data");
-    //     }
-    // }
-
     void computeForwardEulerStep(Eigen::ArrayXd& x2,Eigen::ArrayXd& x1,Eigen::ArrayXd& x0,
                                  const Eigen::ArrayXd& fExt) {
-        assert(counter == 0 || v.isApprox((x0-x1)/dt, 1e-25));
+        // assert(counter == 0 || v.isApprox((x0-x1)/dt, 1e-24));
         counter++;
         x2 = x1;
         x1 = x0;
-        fr = 0;
-        x0 = x0 + dt*v; // = dt*v + x0
+        x0 = dt*v + x0;
         temp1 = fExt*MI;
         x0 = dt*dt*temp1 + x0;
         // temp1 =  (x1 - x2)/dt;
@@ -357,14 +377,28 @@ public:
         double phiOld = std::numeric_limits<double>::max();
 
 
-        DERROR("Newton iteration start. dG=%g\n", dG);
-        // std::cout << "x2=" <<  x2 << std::endl;
+        DERROR("Newton iteration start. dG=%g\n", dG); // std::cout << "x2=" <<  x2 << std::endl;
         // step forward and set the initial guess
 
         // compute initital guess
         computeForwardEulerStep(x2, x1, x0, fExt);
         xHat = x0;
         precomputeStep(x0);
+        
+        if(DEBUG_CHECK_DERIVATIVES) {
+            ImplicitEulerStep step(*this);
+            // cppoptlib::BfgsSolver<ImplicitEulerStep> solver;
+            // Eigen::VectorXd x0v = x0;
+            g = 0;
+            double e = computeOptimizeGradient(x0, g);
+            // std::cout << "energy " << e << std::endl;
+            // std::cout << "gradient " << g.transpose() << std::endl;
+            // assert(step.checkGradient(x0));
+            assert(step.checkHessian(x0));
+            // solver.minimize(step, x0v);
+            // x0 = x0v;
+            // return;
+        }
 
         iNewton=0;
         while(iNewton <= 20) {
@@ -386,9 +420,10 @@ public:
             iNewton++;
             DERROR("Newton iteration i=%d, dG=%g\n", iNewton,dG);
         }
-        DERROR("Energy minimization did not stop after 40 iterations! \
+        char message[200];
+        sprintf(message, "Energy minimization did not stop after 40 iterations! \
                            dE=%g, dE'=%g\n\n", dG, dG);
-        assert(false);
+        throw std::runtime_error(message);
     }
 
 };

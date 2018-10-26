@@ -3,6 +3,7 @@
 #include <Eigen/Dense>
 #include "ImplicitODESolver.hpp"
 #include "InvertibleNeoHookeanModel.hpp"
+#include "StableNeoHookean.hpp"
 #include "CollisionObjects.hpp"
 #include <Eigen/StdVector>
 #include <map>
@@ -24,11 +25,13 @@ public:
     enum ElasticModelType {
         NEOHOOKEAN,
         VENANTKIRCHHOFF,
-        INVERTIBLE_NEOHOOKEAN
+        INVERTIBLE_NEOHOOKEAN,
+        STABLE_NEOHOOKEAN
     };
 
     double invertibleEpsilon = 0.3;
     std::vector<CollisionObject*> collisionObjects;
+
 
     ElasticModelType model = NEOHOOKEAN;
     InvertibleNeoHookeanModel neo;
@@ -44,9 +47,9 @@ public:
     unsigned vertexCount() {
         return n/2;
     }
-    double computeCollisionPenaltyForce(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
+    double computeCollisionPenaltyGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
 
-    void computeCollisionPenaltyForceDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
+    void computeCollisionPenaltyGradientDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
 
     // /**
     //  * Generates a finite element elastic model solver.
@@ -113,8 +116,7 @@ public:
     }
 
 
-    double computeElasticForce(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) {
-        dest = 0;
+    double computeElasticGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) {
         double stressEnergy=0;
         for(unsigned l=0; l<m; l++){
             unsigned int i=2*Te(l, 0), j=2*Te(l, 1), k=2*Te(l, 2);
@@ -126,11 +128,12 @@ public:
                 stressEnergy += W[l]*neoHookeanStress(temp2x2B, lambda[l], mu[l], temp2x2A);
             else if(model == VENANTKIRCHHOFF)
                 stressEnergy += W[l]*venantPiolaStress(temp2x2B, lambda[l], mu[l], temp2x2A);
+            else if(model == STABLE_NEOHOOKEAN)
+                stressEnergy += W[l]*StableNeoHookeanModel::computeStressTensor(temp2x2B, lambda[l], mu[l], temp2x2A);
             else
                 stressEnergy += W[l]*neo.computeStressTensor(temp2x2B, lambda[l], mu[l], temp2x2A);
             temp2x2B = temp2x2A * Bm[l].transpose();
-            addForceMatrixToVector(temp2x2B, dest, i, j, k, l);
-
+            addGradientMatrixToVector(temp2x2B, dest, i, j, k, l);
         }
         return stressEnergy;
     }
@@ -144,10 +147,11 @@ public:
      * of the Piola Kirchhoff Stress due to a small displacement.
      * This is useful for calculating the Newton direction for optimization
      * deltax = K^-1 f
+     *
+     * !!Make sure to zero out dest because the calculations only add to dest
      */
-    void computeElasticForceDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx,
+    void computeElasticDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx,
                                          Eigen::ArrayXd& dest) {
-        dest = 0;
         for(unsigned l=0; l<m; l++){
             unsigned int i=2*Te(l, 0), j=2*Te(l, 1), k=2*Te(l, 2);
             temp2x2A <<
@@ -162,22 +166,24 @@ public:
                 neoHookeanStressDifferential(F, dF, lambda[l], mu[l], dP);
             else if(model == VENANTKIRCHHOFF)
                 venantPiolaStressDifferential(F, dF, lambda[l], mu[l], dP);
+            else if(model == STABLE_NEOHOOKEAN)
+                StableNeoHookeanModel::computeStressDifferential(F, dF, lambda[l], mu[l], dP);
             else
                 neo.computeStressDifferential(F, dF, lambda[l], mu[l], dP);
             temp2x2B = dP*Bm[l].transpose();
-            addForceMatrixToVector(temp2x2B, dest, i, j, k, l);
+            addGradientMatrixToVector(temp2x2B, dest, i, j, k, l);
         }
     }
 
     void populateSelfCollisionList(const Eigen::ArrayXd& x);
 
-    virtual double computeForce(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) override {
-        return computeElasticForce(x, dest) + computeCollisionPenaltyForce(x, dest);
+    virtual double computeGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) override {
+        return computeElasticGradient(x, dest) + computeCollisionPenaltyGradient(x, dest) ;
     }
-    virtual void computeForceDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx,
+    virtual void computeDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx,
                                                Eigen::ArrayXd& dest) override {
-        computeElasticForceDifferential(x, dx, dest);
-        computeCollisionPenaltyForceDifferential(x, dx, dest);
+        computeElasticDifferential(x, dx, dest);
+        computeCollisionPenaltyGradientDifferential(x, dx, dest);
         return;
     }
 
@@ -187,38 +193,17 @@ public:
         // TODO actually precompute stress tensors etc.
     };
 
-    inline static double normP2Squared(Eigen::Matrix2d& m) {
-        return
-            m(0,0)*m(0,0) +
-            m(0,1)*m(0,1) +
-            m(1,0)*m(1,0) +
-            m(1,1)*m(1,1);
+
+    inline void addGradientMatrixToVector(Eigen::Matrix2d& H, Eigen::ArrayXd& f,
+                                             unsigned i, unsigned j, unsigned k, unsigned l) {
+        f(i + 0) += +W[l]*H(0,0);
+        f(i + 1) += +W[l]*H(1,0);
+        f(j + 0) += +W[l]*H(0,1);
+        f(j + 1) += +W[l]*H(1,1);
+        f(k + 0) += -W[l]*H(0,0) -W[l]*H(0,1);
+        f(k + 1) += -W[l]*H(1,0) -W[l]*H(1,1);
     }
 
-    inline void addForceMatrixToVector(Eigen::Matrix2d& H, Eigen::ArrayXd& f,
-                                             int i, int j, int k, int l) {
-        f(i + 0) += -W[l]*H(0,0);
-        f(i + 1) += -W[l]*H(1,0);
-        f(j + 0) += -W[l]*H(0,1);
-        f(j + 1) += -W[l]*H(1,1);
-        f(k + 0) += +W[l]*H(0,0) +W[l]*H(0,1);
-        f(k + 1) += +W[l]*H(1,0) +W[l]*H(1,1);
-    }
-
-    double venantPiolaStress(Eigen::Matrix2d& F,
-                                 double lambda, double mu,
-                                 Eigen::Matrix2d& dest) {
-        double psi=0;
-        temp2x2P << nId;
-        temp2x2P += F.transpose()*F;
-        psi += mu*normP2Squared(temp2x2P)/4.0;
-        double tr = temp2x2P.trace();
-        double k = lambda * tr/2.0;
-        psi += tr*tr*lambda/8.0;
-        temp2x2P = mu*temp2x2P + k*id;
-        dest = F*temp2x2P;
-        return psi;
-    }
 
 
     double neoHookeanStress(Eigen::Matrix2d& F,
@@ -250,20 +235,20 @@ public:
         dest = mu*dF + (mu - lambda*logJ)*dest;
         dest = dest + lambda*trIFdF*temp2x2P;
     }
+    inline static double venantPiolaStress(Eigen::Matrix2d& F,
+                                 double lambda, double mu,
+                                 Eigen::Matrix2d& dest) {
+        Eigen::Matrix2d E = 0.5 *(F.transpose() * F - Eigen::Matrix2d::Identity());
+        dest = F*(2*mu*E + lambda* E.trace() * Eigen::Matrix2d::Identity());
+        return mu*E.squaredNorm() + 0.5*lambda*E.trace()*E.trace();
+    }
 
-    void venantPiolaStressDifferential(Eigen::Matrix2d& F, Eigen::Matrix2d& dF,
+    inline static void venantPiolaStressDifferential(Eigen::Matrix2d& F, Eigen::Matrix2d& dF,
                                  double lambda, double mu,
                                  Eigen::Matrix2d& destDP) {
-        temp2x2P << nId;
-        temp2x2P += F.transpose()*F;
-        double k = lambda * temp2x2P.trace() / 2.0;
-        temp2x2P = mu*temp2x2P + k*id;
-        destDP = dF*temp2x2P;
-
-        temp2x2P = dF.transpose()*F;
-        temp2x2P += F.transpose()*dF;
-        double dk = lambda * temp2x2P.trace() / 2.0;
-        temp2x2P = mu*temp2x2P + dk*id;
-        destDP += F*temp2x2P;
+        Eigen::Matrix2d E = 0.5 *(F.transpose() * F - Eigen::Matrix2d::Identity());
+        Eigen::Matrix2d dE = 0.5 *(dF.transpose() * F + F.transpose()*dF);
+        destDP = dF*(2*mu*E + lambda*E.trace()*Eigen::Matrix2d::Identity())
+                    + F*(2*mu*dE + lambda*dE.trace()*Eigen::Matrix2d::Identity() ) ;
     }
 };

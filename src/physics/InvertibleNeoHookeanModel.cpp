@@ -1,4 +1,5 @@
 #include "physics/InvertibleNeoHookeanModel.hpp"
+#include <iostream>
 
 
 double InvertibleNeoHookeanModel::computeStressTensor(
@@ -6,8 +7,14 @@ double InvertibleNeoHookeanModel::computeStressTensor(
     double lambda, double mu,
     Eigen::Matrix2d& dest)
 {
+    // assert(F(0,1) == 0 && F(1,0) == 0);
+    // assert(F(0,0) <= 1 && F(0,0) >= -1);
     double J = F.determinant();
-    if(J > eps) {
+    auto svd = Math::singularValueDecomposition(F);
+    double u1 = svd[0], u2 = svd[1],
+            sx = svd[2], sy = svd[3],
+            v1 = svd[4], v2 = svd[5];
+    if(J > eps && sx > 0) {
         // normal neohookean
         temp2x2P = F.transpose()*F;
         double I1 = temp2x2P.trace();
@@ -17,12 +24,17 @@ double InvertibleNeoHookeanModel::computeStressTensor(
         return mu*(I1/2.0 - 1 - logJ) + lambda/2.0*logJ*logJ;
     } else {
         // extrapolate
-        auto svd = Math::singularValueDecomposition(F);
-        double u1 = svd[0], u2 = svd[1],
-        sx = svd[2], sy = svd[3],
-        v1 = svd[4], v2 = svd[5];
+        // std::cout << svd << std::endl;
+#ifdef IFE_SOLVER
+        assert(!(sx < 0 && sy < 0));
+        if(sx < 0) {
+            assert(-sx <= sy);
+        }
+        if(sy < 0) {
+            assert(-sy <= sx);
+        }
+#endif
         auto r = computeStressGradientComponents(sx, sy, lambda, mu, eps);
-        assert(std::abs(J-sx*sy) < 1e-9);
         double psi0 = r[0], psi1=r[1], psi2=r[2];
         dest(0,0) = psi1*u1*v1 - psi2*u2*v2;
         dest(0,1) = -(psi2*u2*v1) - psi1*u1*v2;

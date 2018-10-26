@@ -39,7 +39,7 @@ bool pointInTriangle(double px, double py, double p0x, double p0y,
 
 // adds force resulting from point iPoint inside surface (surface is a line from
 // vertex i to j)
-double addSelfCollisionPenaltyForce(
+double addSelfCollisionPenaltyGradient(
     std::array<unsigned, 3> triplet,
     const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) {
 
@@ -156,7 +156,7 @@ void addSelfCollisionPenaltyForceDifferential(
 }
 
 
-double ElasticModel::computeCollisionPenaltyForce(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest)
+double ElasticModel::computeCollisionPenaltyGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest)
 {
     double E = 0;
     // first loop: object collision
@@ -165,7 +165,7 @@ double ElasticModel::computeCollisionPenaltyForce(const Eigen::ArrayXd& x, Eigen
         for(auto& c: collisionObjects) {
             if(c->boundingBox().contains(px, py)) {
                 // TODO: this always uses mass in x direction
-                E += c->computePenaltyForce(&x[2*i], &v[2*i], dt/M[2*i],&dest[2*i]);
+                E += c->computePenaltyGradient(&x[2*i], &v[2*i], dt/M[2*i],&dest[2*i]);
             }
         }
     }
@@ -218,13 +218,13 @@ void ElasticModel::populateSelfCollisionList(const Eigen::ArrayXd& x) {
 
 }
 
-void ElasticModel::computeCollisionPenaltyForceDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest)
+void ElasticModel::computeCollisionPenaltyGradientDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest)
 {
     for(unsigned i=0; i<x.size()/2; i++) {
         double px=x[2*i + 0], py = x[2*i + 1];
         for(CollisionObject* c: collisionObjects) {
             if(c->boundingBox().contains(px, py)) {
-                c->computePenaltyForceDifferential(&x[2*i], &dx[2*i], &dest[2*i]);
+                c->computePenaltyGradientDifferential(&x[2*i], &dx[2*i], &dest[2*i]);
             }
         }
     }

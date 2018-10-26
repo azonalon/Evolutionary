@@ -120,10 +120,10 @@ namespace Math {
         //     return col;
         // }
 
-        static double harmonicMean(double a, double b) {
+        static inline double harmonicMean(double a, double b) {
             return 2 * a * b / (a + b + 1e-9);
         }
-        static double sqrd(double a) {
+        static inline double sqrd(double a) {
             return a*a;
         }
     }

@@ -242,8 +242,10 @@ Eigen::Matrix<double,3,1> InvertibleNeoHookeanModel::computeStressGradientCompon
 	double delta2 = delta*delta;
 	double c0 = square(ux+uy);
 	double c1 = c0+4*ux*uy*delta;
+#ifdef IFE_SOLVER
 	assert (c1 > 0);
 	assert (sx + sy >= 0); // IFE Convention
+#endif
 	double lEps = log(eps);
 	double k = mu -(-l+l*lEps);
 	double bEps = sqrt(c1);
