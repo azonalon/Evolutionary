@@ -23,7 +23,8 @@ class StableNeoHookeanModel {
 
   static double computeStressTensor(const Eigen::Matrix2d& F, double lambda,
                                     double mu, Eigen::Matrix2d& dest) {
-    double alpha = 1 + mu / lambda - (mu / 4) * lambda;
+    // double alpha = 1 + mu / lambda - (mu / 4) * lambda; this is the 3D case
+    double alpha = 1 + 2./3. * mu / lambda; // 2D case
     double Ic = (F.transpose() * F).trace();
     double detF = F.determinant();
     dest = mu * F * (1 - 1 / (Ic + 1)) + lambda * (detF - alpha) * JpF(F);
@@ -35,7 +36,8 @@ class StableNeoHookeanModel {
                                         const Eigen::Matrix2d& dF,
                                         double lambda, double mu,
                                         Eigen::Matrix2d& dest) {
-    double alpha = 1 + mu / lambda - (mu / 4) * lambda;
+    // double alpha = 1 + mu / lambda - (mu / 4) * lambda; this is the 3D case
+    double alpha = 1 + 2./3. * mu / lambda; // 2D case
     double Ic = (F.transpose() * F).trace();
     double detF = F.determinant();
 

@@ -1,50 +1,75 @@
 #include "physics/CollisionObjects.hpp"
 #include <cmath>
+#include <iostream>
 using namespace Eigen;
 using namespace std;
 static double a = 1000;
 static double mu = 1;
 
-inline double sign(double x) {
-    return x < 0 ? -1: 1;
-}
-inline double clampZero(double a) {
-    return a < 0 ? 0:a;
-}
+inline double sign(double x) { return x < 0 ? -1 : 1; }
+inline double clampZero(double a) { return a < 0 ? 0 : a; }
 
-const BoundingBox& Rectangle::boundingBox() const {
+const BoundingBox& Rectangle::boundingBoxUntransformed() const {
+    // Eigen::Vector2d a(box.x0, box.y0);
+    // Eigen::Vector2d b(box.x1, box.y1);
+    // a = aux * a;
+    // b = aux * b;
+    // return BoundingBox{a.x(), a.y(), b.x(), b.y()};
     return box;
 };
 
-double Rectangle::computePenaltyGradient(const double* pp,
-                                        double* v, double dtbym,
-                                        double* gp) const {
-    const double& px = pp[0], py=pp[1];
-    double dx = w - abs(px), dy = h - abs(py);
-    if(dx > 0 && dx < dy) {
-        *(gp+0) -= a*2*dx*sign(px);
-        // compute friction
-        double c = 1 - dtbym*mu*2*a*dx / ( abs(*(v+1)));
-        *(v+1) *= clampZero(c);
-        return dx*dx*a;
-    } else if(dy > 0 && dy < dx){
-        *(gp+1) -= a*2*dy*sign(py);
-        double c = 1 - dtbym*mu*2*a*dy / ( abs(*(v+0)));
-        *(v+0) *= clampZero(c);
-        return dy*dy*a;
-    }
-    return 0;
+double Rectangle::computePenaltyGradient(const double* pp, double* vv,
+                                         double dtbym, double* gp) const {
+  // const double& px = pp[0], py=pp[1];
+  Eigen::Map<const Eigen::Vector2d> pur(pp);
+  Eigen::Map<Eigen::Vector2d> vur(vv);
+  Eigen::Map<Eigen::Vector2d> gur(gp);
+  Eigen::Vector2d p = aux * pur;
+  Eigen::Vector2d v = aux.linear() * vur;
+  Eigen::Vector2d g = aux.linear() * gur;
+  // std::cout << aux << std::endl;
+  // std::cout << aux.linear() << std::endl;
+  double E=0;
+
+  double dx = w - abs(p.x()), dy = h - abs(p.y());
+  if (dx >= 0 && dx < dy) {
+    g.x() -= a * 2 * dx * sign(p.x());
+    // compute friction
+    double c = 1 - dtbym * mu * 2 * a * dx / abs(v.y());
+    // TODO: there is a problem with friction and energy, the gradient is not corresponding
+    // to the energy function given by E. To allow friction, uncomment the next line
+    v.y() *= clampZero(c);
+    E = dx * dx * a;
+  } else if (dy >= 0 && dy < dx) {
+    g.y() -= a * 2 * dy * sign(p.y());
+    double c = 1 - dtbym * mu * 2 * a * dy / abs(v.x());
+    // TODO: there is a problem with friction and energy, the gradient is not corresponding
+    // to the energy function given by E. To allow friction, uncomment the next line
+    v.x() *= clampZero(c);
+    E = dy * dy * a;
+  }
+
+  vur = aux.linear().inverse() * v;
+  gur = aux.linear().inverse() * g;
+  return E;
 };
 
-void Rectangle::computePenaltyGradientDifferential(const double* p,
-                                                    const double* dp,
-                                                    double* dg) const {
-    const double& px = p[0], py=p[1];
-    double dx = w - abs(px), dy = h - abs(py);
-    if(dx > 0 && dx < dy) {
-        *(dg + 0) += a* 2 * *(dp+0);
-    } else if(dy > 0 && dy<dx){
-        *(dg + 1) += a* 2 * *(dp+1);
-    }
-    return;
+void Rectangle::computePenaltyGradientDifferential(const double* pp,
+                                                   const double* dpp,
+                                                   double* dgg) const {
+  Eigen::Map<const Eigen::Vector2d> pur(pp);
+  Eigen::Map<const Eigen::Vector2d> dpur(dpp);
+  Eigen::Map<Eigen::Vector2d> dgur(dgg);
+
+  Eigen::Vector2d p = aux * pur;
+  Eigen::Vector2d dp = aux.linear() * dpur;
+  Eigen::Vector2d dg = aux.linear() * dgur;
+
+  double dx = w - abs(p.x()), dy = h - abs(p.y());
+  if (dx > 0 && dx < dy) {
+    dg.x() += a * 2 * dp.x();
+  } else if (dy > 0 && dy < dx) {
+    dg.y() += a * 2 * dp.y();
+  }
+  dgur = aux.linear().inverse() * dg;
 }
