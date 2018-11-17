@@ -9,7 +9,7 @@
 #include "util/Assertions.hpp"
 #include "util/Math.hpp"
 
-#define EVOLUTIONARY_DEBUG true
+#define EVOLUTIONARY_DEBUG false
 #include "util/Debug.hpp"
 static constexpr bool DEBUG_CHECK_DERIVATIVES = false;
 

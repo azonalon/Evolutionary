@@ -189,7 +189,7 @@ public:
 
 
     virtual void precomputeStep(const Eigen::ArrayXd& x) override {
-        // populateSelfCollisionList(x);
+        populateSelfCollisionList(x);
         // TODO actually precompute stress tensors etc.
     };
 
