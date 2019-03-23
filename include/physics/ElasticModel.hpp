@@ -19,7 +19,11 @@ public:
     Eigen::Matrix2d temp2x2A, temp2x2B, temp2x2P, temp2x2D, H, P, F, dF, dP;
     const Eigen::Matrix2d id  =  Eigen::Matrix2d::Identity();
     const Eigen::Matrix2d nId = -Eigen::Matrix2d::Identity();
+    // surfaces contains indices to the outer edges
     std::vector<std::vector<unsigned int>> surfaces;
+    // selfcollisionlist contains in the first index the vertex which collided
+    // with the face defined by the two vertices corresponding to the last
+    // two indices
     std::vector<std::array<unsigned, 3>> selfCollisionList;
 
     enum ElasticModelType {
@@ -38,6 +42,7 @@ public:
     // std::vector<Eigen::Vector3i, Eigen::aligned_allocator<Eigen::Vector3i>> Te; // nx3 indices for each triangle into point vector
     Eigen::Matrix<unsigned int, Eigen::Dynamic, 3, Eigen::RowMajor> Te;
     std::vector<double> W; // reference triangle volumes
+    std::vector<double> S; // stretch factors
     std::vector<double> mu; // first lame coefficient for each triangle
     std::vector<double> lambda; // second lame coefficient
 
@@ -74,7 +79,7 @@ public:
                 const std::vector<double>& _mu, const std::vector<double>& _lambda, const std::vector<double>& M,
                 ElasticModelType model, double eps=0.5):
                         ImplicitODESolver(vertices.size(), M), n(vertices.size()), m(triangles.size()),
-                        Bm(m), model(model), neo(eps), Te(m, 3), W(m), mu(m), lambda(m)
+                        Bm(m), model(model), neo(eps), Te(m, 3), W(m), mu(m), lambda(m), S(m)
                         {
 
         assert(triangles.size() == _mu.size());
@@ -89,6 +94,7 @@ public:
             ;
             this->mu[i] = _mu[i];
             this->lambda[i] = _lambda[i];
+            this->S[i] = 1;
             // lambda[l] = K[l]*nu[l]/(1+nu[l])/(1-2*nu[l]);
             // mu[l] = K[l]/2/(1+nu[l]);
         }
@@ -123,7 +129,7 @@ public:
             temp2x2A <<
                   x(i + 0) - x(k + 0), x(j + 0) - x(k + 0),
                   x(i + 1) - x(k + 1), x(j + 1) - x(k + 1);
-            temp2x2B = temp2x2A*Bm[l];
+            temp2x2B = temp2x2A*S[l]*Bm[l];
             if(model == NEOHOOKEAN)
                 stressEnergy += W[l]*neoHookeanStress(temp2x2B, lambda[l], mu[l], temp2x2A);
             else if(model == VENANTKIRCHHOFF)
@@ -132,7 +138,7 @@ public:
                 stressEnergy += W[l]*StableNeoHookeanModel::computeStressTensor(temp2x2B, lambda[l], mu[l], temp2x2A);
             else
                 stressEnergy += W[l]*neo.computeStressTensor(temp2x2B, lambda[l], mu[l], temp2x2A);
-            temp2x2B = temp2x2A * Bm[l].transpose();
+            temp2x2B = temp2x2A * S[l]*Bm[l].transpose();
             addGradientMatrixToVector(temp2x2B, dest, i, j, k, l);
         }
         return stressEnergy;
@@ -160,8 +166,8 @@ public:
             temp2x2B <<
                   dx(i + 0) - dx(k + 0), dx(j + 0) - dx(k + 0),
                   dx(i + 1) - dx(k + 1), dx(j + 1) - dx(k + 1);
-            F = temp2x2A * Bm[l];
-            dF = temp2x2B * Bm[l];
+            F = temp2x2A * S[l]*Bm[l];
+            dF = temp2x2B * S[l]*Bm[l];
             if(model == NEOHOOKEAN)
                 neoHookeanStressDifferential(F, dF, lambda[l], mu[l], dP);
             else if(model == VENANTKIRCHHOFF)
@@ -170,7 +176,7 @@ public:
                 StableNeoHookeanModel::computeStressDifferential(F, dF, lambda[l], mu[l], dP);
             else
                 neo.computeStressDifferential(F, dF, lambda[l], mu[l], dP);
-            temp2x2B = dP*Bm[l].transpose();
+            temp2x2B = dP*S[l]*Bm[l].transpose();
             addGradientMatrixToVector(temp2x2B, dest, i, j, k, l);
         }
     }
@@ -178,7 +184,7 @@ public:
     void populateSelfCollisionList(const Eigen::ArrayXd& x);
 
     virtual double computeGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) override {
-        return computeElasticGradient(x, dest) + computeCollisionPenaltyGradient(x, dest) ;
+        return computeElasticGradient(x, dest) + computeCollisionPenaltyGradient(x, dest);
     }
     virtual void computeDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx,
                                                Eigen::ArrayXd& dest) override {

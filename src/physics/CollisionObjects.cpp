@@ -18,6 +18,10 @@ const BoundingBox& Rectangle::boundingBoxUntransformed() const {
     return box;
 };
 
+/**
+ * 
+ * 
+ * */
 double Rectangle::computePenaltyGradient(const double* pp, double* vv,
                                          double dtbym, double* gp) const {
   // const double& px = pp[0], py=pp[1];
