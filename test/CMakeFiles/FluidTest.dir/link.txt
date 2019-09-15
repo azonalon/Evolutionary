@@ -1,0 +1,1 @@
+/usr/bin/c++   -std=c++17  -rdynamic CMakeFiles/FluidTest.dir/physics/FluidTests.cpp.o  -o FluidTest ../src/libEvolutionary.a 

@@ -1,0 +1,1 @@
+/usr/bin/c++   -std=c++17  -rdynamic CMakeFiles/CollisionTest.dir/physics/CollisionTests.cpp.o  -o CollisionTest ../src/libEvolutionary.a 

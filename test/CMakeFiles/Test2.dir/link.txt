@@ -1,0 +1,1 @@
+/usr/bin/c++   -std=c++17  -rdynamic CMakeFiles/Test2.dir/physics/MathFunctionTests.cpp.o  -o Test2 ../src/libEvolutionary.a 

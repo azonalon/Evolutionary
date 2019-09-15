@@ -306,7 +306,9 @@ void ElasticModel::collisionPrecompute(const std::vector<double>& vertices) {
         auto adjacent = boost::adjacent_vertices(chain, g);
         chain = *adjacent.first;
       } while (!g[chain].visited);
-      surfaces.push_back(surface);
+      if(surface.size() > 1) { 
+        surfaces.push_back(surface);
+      }
     }
   }
 }

@@ -19,7 +19,8 @@ public:
     Eigen::Matrix2d temp2x2A, temp2x2B, temp2x2P, temp2x2D, H, P, F, dF, dP;
     const Eigen::Matrix2d id  =  Eigen::Matrix2d::Identity();
     const Eigen::Matrix2d nId = -Eigen::Matrix2d::Identity();
-    // surfaces contains indices to the outer edges
+    // surfaces contains indices to the outer edges for each disconnected 
+    // object
     std::vector<std::vector<unsigned int>> surfaces;
     // selfcollisionlist contains in the first index the vertex which collided
     // with the face defined by the two vertices corresponding to the last
@@ -34,17 +35,18 @@ public:
     };
 
     double invertibleEpsilon = 0.3;
+    double kFluid = 1;
     std::vector<CollisionObject*> collisionObjects;
 
 
     ElasticModelType model = NEOHOOKEAN;
-    InvertibleNeoHookeanModel neo;
     // std::vector<Eigen::Vector3i, Eigen::aligned_allocator<Eigen::Vector3i>> Te; // nx3 indices for each triangle into point vector
+    InvertibleNeoHookeanModel neo;
     Eigen::Matrix<unsigned int, Eigen::Dynamic, 3, Eigen::RowMajor> Te;
     std::vector<double> W; // reference triangle volumes
-    std::vector<double> S; // stretch factors
     std::vector<double> mu; // first lame coefficient for each triangle
     std::vector<double> lambda; // second lame coefficient
+    std::vector<double> S; // stretch factors
 
     unsigned triangleCount() {
         return m;
@@ -55,6 +57,10 @@ public:
     double computeCollisionPenaltyGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
 
     void computeCollisionPenaltyGradientDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
+
+    double computeFluidFrictionGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
+
+    void computeFluidFrictionGradientDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
 
     // /**
     //  * Generates a finite element elastic model solver.
@@ -184,12 +190,16 @@ public:
     void populateSelfCollisionList(const Eigen::ArrayXd& x);
 
     virtual double computeGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) override {
-        return computeElasticGradient(x, dest) + computeCollisionPenaltyGradient(x, dest);
+      double E = computeElasticGradient(x, dest);
+    //   E += computeCollisionPenaltyGradient(x, dest);
+    //   E += computeFluidFrictionGradient(x, dest);
+      return E;
     }
     virtual void computeDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx,
                                                Eigen::ArrayXd& dest) override {
         computeElasticDifferential(x, dx, dest);
-        computeCollisionPenaltyGradientDifferential(x, dx, dest);
+        // computeCollisionPenaltyGradientDifferential(x, dx, dest);
+        // computeFluidFrictionGradientDifferential(x, dx, dest);
         return;
     }
 

@@ -1,4 +1,3 @@
-#pragma once
 #include <cppoptlib/problem.h>
 #include <cppoptlib/solver/bfgssolver.h>
 #include <Eigen/Dense>
@@ -8,10 +7,17 @@
 #include <vector>
 #include "util/Assertions.hpp"
 #include "util/Math.hpp"
+#pragma once
 
+#ifndef EVOLUTIONARY_DEBUG 
 #define EVOLUTIONARY_DEBUG false
+#endif
 #include "util/Debug.hpp"
 static constexpr bool DEBUG_CHECK_DERIVATIVES = false;
+static constexpr bool DEBUG_LINESEARCH = false;
+static constexpr bool SKIP_LINESEARCH = false;
+
+// TODO: Implement swapping of pointers for the arrays instead of copying
 
 class ImplicitODESolver {
  public:
@@ -42,6 +48,24 @@ class ImplicitODESolver {
       }
     }
   };
+  void lineSearchDebugDumpFile(double alpha, double alphamin, double alphamax) {
+    unsigned N = 300;
+    Eigen::ArrayXd values(N);
+    g = 0;
+    Eigen::ArrayXd x(x0);
+    auto vOld = v;
+    auto alphas = Eigen::ArrayXd::LinSpaced(N, alphamin, alphamax);
+    for (unsigned i = 0; i < N; i++) {
+      x = x0 + alphas[i] * dn;
+      values(i) = computeOptimizeGradient(x, g);
+    }
+    std::ofstream f;
+    f.open("linesearch.dat");
+    f << values;
+    f.close();
+    v = vOld;
+  };
+
   std::function<void(ImplicitODESolver*, double)> lineSearchHook =
       [](auto s, double alpha) { return; };
   virtual double computeGradient(const Eigen::ArrayXd& x,
@@ -56,11 +80,12 @@ class ImplicitODESolver {
   int iNewton = 0;
 
   Eigen::ArrayXd dn, g, x0, x1, x2, v, xHat, temp1, temp2, M, MI, fExt, xAlpha,
-      gConst, r, p, fr;
+      gConst, r, p, fr, modelForces;
   double dG, dPhi, dX, phi, dN;
   double kDamp = 0.0;
   double dt = 0.1;
-  double newtonAccuracy = 1e-3;
+  double newtonAccuracy = 1e-1;
+  unsigned dim;
 
   void conjugateGradientSolve(
       const Eigen::ArrayXd& rhs, const Eigen::ArrayXd& initialGuess,
@@ -109,15 +134,6 @@ class ImplicitODESolver {
   }
 
   void computeNewtonDirection(const Eigen::ArrayXd& g, Eigen::ArrayXd& dn) {
-    // conjugateGradientSolve(g, g, [&](const auto& dx, auto& lhs) -> void {
-    //     lhs = 0;
-    //     temp2 = 0;
-    //     computeForceDifferential(x0, dx, lhs);
-    //     computeForceDifferential(x1, dx, temp2);
-    //     lhs = lhs - kDamp/dt*temp2;
-    //     temp2 = M*dx;
-    //     lhs += temp2/dt/dt;
-    // }, dn);
     conjugateGradientSolve(g, g,
                            [&](const auto& dx, auto& df) {
                              df = 0;
@@ -143,6 +159,9 @@ class ImplicitODESolver {
     dest = kDamp * temp2;
 
     energy += computeGradient(x, dest);
+    dest += fExt*MI;
+    energy += (fExt * x * MI).sum();
+    modelForces = dest + fExt;
 
     temp1 = x - xHat;
     temp2 = M * temp1;
@@ -154,7 +173,7 @@ class ImplicitODESolver {
 
   ImplicitODESolver(unsigned n, const std::vector<double>& masses)
       : dn(n), g(n), x0(n), x1(n), x2(n), v(n), xHat(n), temp1(n), temp2(n),
-        M(n), MI(n), fExt(n), xAlpha(n), gConst(n), r(n), p(n), fr(n)
+        M(n), MI(n), fExt(n), xAlpha(n), gConst(n), r(n), p(n), fr(n), modelForces(n), dim(n)
   // Eigen::ArrayXd dn, g, x0, x1, x2, v, xHat,
   //             temp1, temp2, M, MI, fExt,
   //             xAlpha, gConst, r, p;
@@ -182,15 +201,23 @@ class ImplicitODESolver {
     g = 0;
     phi = computeOptimizeGradient(x0, g);
     dG = (g * g).sum();
-    if (dG < newtonAccuracy) {
-      return dG;
-    }
-    computeNewtonDirection(g, dn);
 
+    // if (dG < newtonAccuracy/dim) {
+    //   return dG;
+    // }
+
+    computeNewtonDirection(g, dn);
     dN = (dn * dn).sum();
-    if(dN < 1e-7) {
+
+    if(dN < 1e-5) {
       return 0.0;
     }
+
+    if(SKIP_LINESEARCH) {
+      x0 = x0 + alpha * dn;
+      return dN;
+    }
+
     computeDPhi(g, dn);
     // printf("Phi=%g, Dphi=%g\n, dN=%g\n", phi, dPhi, dN);
 
@@ -217,9 +244,9 @@ class ImplicitODESolver {
     //   dN = l;
     // }
     alpha = strongWolfeLineSearch(alpha, alphaMax);
-    lineSearchHook(this, alpha);
     x0 = x0 + alpha * dn;
     dG = (g * g).sum();
+    lineSearchHook(this, alpha);
     // return dG * (1 - alpha) * 2;
     return dG;
   }
@@ -282,6 +309,9 @@ class ImplicitODESolver {
       phi0 = phi1;
       dPhi0 = dPhi1;
       alpha1 = choose(alpha1, phi, dPhi, alphaMax);
+      if(DEBUG_LINESEARCH) {
+        lineSearchDebugDumpFile(alpha1, -2, 2);
+      }
       phi1 = phi;
       dPhi1 = dPhi;
       j++;
@@ -341,7 +371,7 @@ class ImplicitODESolver {
 
   static double interpolate(double a, double fa, double dfa, double b,
                             double fb, double dfb) {
-    double c = 5e-2;
+    // double c = 5e-2;
     double d = b - a;
     double s = Math::signum(d);
     double d1 = dfa + dfb - 3 * (fa - fb) / (a - b);
@@ -364,8 +394,9 @@ class ImplicitODESolver {
   static double choose(double alpha1, double phi, double dphi,
                        double alphaMax) {
     // TODO: make it smart
-    std::cout << "choose was called\n"; 
-    return std::min(2 * alpha1, alphaMax);
+    double result = std::min(2 * alpha1, alphaMax);
+    printf("choose called with alphamax=%g, alpha1=%g returned alpha=%g\n", alphaMax, alpha1, result); 
+    return result;
   }
 
   void computePhiDPhi(double alpha) {
@@ -407,7 +438,7 @@ class ImplicitODESolver {
       // cppoptlib::BfgsSolver<ImplicitEulerStep> solver;
       // Eigen::VectorXd x0v = x0;
       g = 0;
-      double e = computeOptimizeGradient(x0, g);
+      // double e = computeOptimizeGradient(x0, g);
       // std::cout << "energy " << e << std::endl;
       // std::cout << "gradient " << g.transpose() << std::endl;
       assert(step.checkGradient(x0));
@@ -420,7 +451,7 @@ class ImplicitODESolver {
     iNewton = 0;
     while (iNewton <= 40) {
       dG = newtonStep();
-      if (dG < newtonAccuracy) {
+      if (dG < newtonAccuracy/dim) {
         DERROR("Newton iteration stopped: i=%d, dG=%g\n", iNewton, dG);
         return;
       }
@@ -437,7 +468,7 @@ class ImplicitODESolver {
     }
     // char message[200];
     // sprintf(message,
-    //         "Energy minimization did not stop after 40 iterations! \
+    //         "Energy minimization did not stop after 40 iterations!  
     //                        dE=%g, dE'=%g\n\n",
     //         dG, dG);
     // throw std::runtime_error(message);

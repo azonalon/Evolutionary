@@ -1,0 +1,143 @@
+Start testing: Mar 29 21:09 CET
+----------------------------------------------------------
+1/5 Testing: Test1
+1/5 Test: Test1
+Command: "/home/eduard/programming/Evolutionary/test/Test1"
+Directory: /home/eduard/programming/Evolutionary
+"Test1" start time: Mar 29 21:09 CET
+Output:
+----------------------------------------------------------
+/home/eduard/programming/Evolutionary/test/physics/InvertibleNeoHookeanStressDensityTests.cpp, line 15: check passed
+/home/eduard/programming/Evolutionary/test/physics/InvertibleNeoHookeanStressDensityTests.cpp, line 16: check passed
+/home/eduard/programming/Evolutionary/test/physics/InvertibleNeoHookeanStressDensityTests.cpp, line 22: check passed
+/home/eduard/programming/Evolutionary/test/physics/InvertibleNeoHookeanStressDensityTests.cpp, line 23: check passed
+/home/eduard/programming/Evolutionary/test/physics/InvertibleNeoHookeanStressDensityTests.cpp, line 29: check passed
+/home/eduard/programming/Evolutionary/test/physics/InvertibleNeoHookeanStressDensityTests.cpp, line 30: check passed
+/home/eduard/programming/Evolutionary/test/physics/InvertibleNeoHookeanStressDensityTests.cpp, line 36: check passed
+/home/eduard/programming/Evolutionary/test/physics/InvertibleNeoHookeanStressDensityTests.cpp, line 37: check passed
+/home/eduard/programming/Evolutionary/test/physics/InvertibleNeoHookeanStressDensityTests.cpp, line 46: check passed
+/home/eduard/programming/Evolutionary/test/physics/InvertibleNeoHookeanStressDensityTests.cpp, line 47: check passed
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"Test1" end time: Mar 29 21:09 CET
+"Test1" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/5 Testing: Test2
+2/5 Test: Test2
+Command: "/home/eduard/programming/Evolutionary/test/Test2"
+Directory: /home/eduard/programming/Evolutionary
+"Test2" start time: Mar 29 21:09 CET
+Output:
+----------------------------------------------------------
+Test2: /home/eduard/programming/Evolutionary/test/physics/../../include/physics/ImplicitODESolver.hpp:359: static double ImplicitODESolver::interpolate(double, double, double, double, double, double): Assertion `x <= std::max(a, b) && x >= std::min(a, b) && "interp alpha not in interval"' failed.
+<end of output>
+Test time =   0.50 sec
+----------------------------------------------------------
+Test Failed.
+"Test2" end time: Mar 29 21:09 CET
+"Test2" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/5 Testing: Test3
+3/5 Test: Test3
+Command: "/home/eduard/programming/Evolutionary/test/Test3"
+Directory: /home/eduard/programming/Evolutionary
+"Test3" start time: Mar 29 21:09 CET
+Output:
+----------------------------------------------------------
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 47: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 76: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 77: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 78: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 79: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 86: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 91: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 117: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 123: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 124: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 130: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 142: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 143: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 149: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 189: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 190: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 206: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+/home/eduard/programming/Evolutionary/test/physics/ElasticModelTests.cpp, line 217: check passed
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"Test3" end time: Mar 29 21:09 CET
+"Test3" time elapsed: 00:00:00
+----------------------------------------------------------
+
+Unable to find executable: /home/eduard/programming/Evolutionary/test/CollisionTest
+4/5 Testing: CollisionTest
+4/5 Test: CollisionTest
+Command: ""
+Directory: /home/eduard/programming/Evolutionary
+"CollisionTest" start time: 
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"CollisionTest" end time: Mar 29 21:09 CET
+"CollisionTest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/5 Testing: FluidTest
+5/5 Test: FluidTest
+Command: "/home/eduard/programming/Evolutionary/test/FluidTest"
+Directory: /home/eduard/programming/Evolutionary
+"FluidTest" start time: Mar 29 21:09 CET
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"FluidTest" end time: Mar 29 21:09 CET
+"FluidTest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Mar 29 21:09 CET

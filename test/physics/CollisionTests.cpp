@@ -71,7 +71,7 @@ int main() {
         1.59725485938368905181050649844110012054443359375000,
         -8.5015565979776681615476263687014579772949218750000;
 
-    addSelfCollisionPenaltyForce({0, 2, 4}, x, f);
+    addSelfCollisionPenaltyGradient({0, 2, 4}, x, f);
     // assertArrayEquals(f, -fCorrect, 1e-15);
 
     Eigen::Matrix<double, 6, 6> hCorrect;
@@ -114,6 +114,7 @@ int main() {
         -0.125684959182425673513381199051203402917273890124;
 
 
+    hCorrect = -hCorrect
     Eigen::Matrix<double, 6, 6> hTest;
     Eigen::Array<double,  6,1> dx(6);
 
@@ -122,7 +123,7 @@ int main() {
         dx = 0;
         f = 0;
         dx(i) = 1.0;
-        addSelfCollisionPenaltyForceDifferential({0, 2, 4}, x, dx, f);
+        addSelfCollisionPenaltyGradientDifferential({0, 2, 4}, x, dx, f);
         for(int j=0; j<6;j++) {
             hTest(i, j) = f(j);
         }
