@@ -80,11 +80,13 @@ class ImplicitODESolver {
   int iNewton = 0;
 
   Eigen::ArrayXd dn, g, x0, x1, x2, v, xHat, temp1, temp2, M, MI, fExt, xAlpha,
-      gConst, r, p, fr, modelForces;
+      gConst, r, p, fr;
+  // modelForces for rendering arrows representing force
+  Eigen::ArrayXd modelForces; 
   double dG, dPhi, dX, phi, dN;
   double kDamp = 0.0;
-  double dt = 0.1;
-  double newtonAccuracy = 1e-1;
+  double dt = 10;
+  double newtonAccuracy = 1e-3;
   unsigned dim;
 
   void conjugateGradientSolve(
@@ -161,7 +163,7 @@ class ImplicitODESolver {
     energy += computeGradient(x, dest);
     dest += fExt*MI;
     energy += (fExt * x * MI).sum();
-    modelForces = dest + fExt;
+    modelForces = dest; 
 
     temp1 = x - xHat;
     temp2 = M * temp1;
@@ -202,19 +204,21 @@ class ImplicitODESolver {
     phi = computeOptimizeGradient(x0, g);
     dG = (g * g).sum();
 
-    // if (dG < newtonAccuracy/dim) {
-    //   return dG;
-    // }
+    if (dG < newtonAccuracy/dim) {
+      return dG;
+    }
 
     computeNewtonDirection(g, dn);
     dN = (dn * dn).sum();
 
-    if(dN < 1e-5) {
-      return 0.0;
-    }
+    // if(dN < 1e-5) {
+    //   return 0.0;
+    // }
 
     if(SKIP_LINESEARCH) {
       x0 = x0 + alpha * dn;
+      // phi = computeOptimizeGradient(x0, g);
+      // dG = (g * g).sum();
       return dN;
     }
 
@@ -237,14 +241,11 @@ class ImplicitODESolver {
       dPhi =-dG;
       dN = dG;
       alpha = 0.01*alpha;
-      // dn.set(g);
     }
-    // if (dN > l) {
-    //   dn = dn * l / dN;
-    //   dN = l;
-    // }
+
     alpha = strongWolfeLineSearch(alpha, alphaMax);
     x0 = x0 + alpha * dn;
+    phi = computeOptimizeGradient(x0, g);
     dG = (g * g).sum();
     lineSearchHook(this, alpha);
     // return dG * (1 - alpha) * 2;
@@ -262,10 +263,7 @@ class ImplicitODESolver {
     double dPhi1 = dPhi;
     double c1 = 1e-2;
     double c2 = 1e-2;
-    // scanLineToFile(5*alpha, 100, String.format("scanline_%04.4f_%02d.dat", t,
-    // iNewton));
     int j = 1;
-    // lineSearchStep(alpha);
     DMESSAGE("Line search start.");
     while (j < 30) {
       computePhiDPhi(alpha1);
@@ -413,7 +411,7 @@ class ImplicitODESolver {
     counter++;
     x2 = x1;
     x1 = x0;
-    x0 = dt * v + x0;
+    x0 = 2*x0-x1;
     temp1 = fExt * MI;
     x0 = dt * dt * temp1 + x0;
     // temp1 =  (x1 - x2)/dt;
@@ -449,13 +447,13 @@ class ImplicitODESolver {
     }
 
     iNewton = 0;
-    while (iNewton <= 40) {
+    while (iNewton <= 10) {
       dG = newtonStep();
       if (dG < newtonAccuracy/dim) {
-        DERROR("Newton iteration stopped: i=%d, dG=%g\n", iNewton, dG);
+        DERROR("Newton iteration stopped: i=%d, dG=%g\n---------------------------------\n", iNewton, dG);
         return;
       }
-      if (phi >= phiOld * 1.2) {
+      if (phi >= phiOld) {
         DERROR("Energy minimization did not converge!\n phi=%g, phiOld=%g\n",
                 phi, phiOld);
         // assert(false);
@@ -466,6 +464,7 @@ class ImplicitODESolver {
       iNewton++;
       DERROR("Newton iteration i=%d, dG=%g, phi=%g\n",  iNewton, dG, phi);
     }
+    DERROR("Newton iteration stopped: i=%d, dG=%g\n---------------------------------\n", iNewton, dG);
     // char message[200];
     // sprintf(message,
     //         "Energy minimization did not stop after 40 iterations!  

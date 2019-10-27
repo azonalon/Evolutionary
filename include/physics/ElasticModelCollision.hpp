@@ -1,5 +1,8 @@
 #include <Eigen/Dense>
 
+extern double muSelfFriction;
+extern double strengthSelfCollision;
+
 double squarePointLineSegmentDistance(double px, double py,
                                             double p0x, double p0y,
                                             double p1x, double p1y);
