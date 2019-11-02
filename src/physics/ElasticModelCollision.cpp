@@ -5,7 +5,7 @@
 #include "physics/ElasticModel.hpp"
 
 using namespace Eigen;
-double strengthSelfCollision = 10000;
+double strengthSelfCollision = 100000;
 double muSelfFriction = 1000;
 #ifndef SELF_COLLISION_FRICTION_ENABLE
 #define SELF_COLLISION_FRICTION_ENABLE true
@@ -18,6 +18,10 @@ static inline double clampOne(double x) {
   return 1;
 }
 
+static inline double squarePointPointDistance(double px, double py, double p0x,
+                                              double p0y) {
+  return ((px - p0x) * (px - p0x) + (py - p0y) * (py - p0y));
+}
 static inline double squarePointLineSegmentDistance(double px, double py, double p0x,
                                       double p0y, double p1x, double p1y) {
   double dX10 = p1x - p0x;
@@ -224,6 +228,28 @@ double ElasticModel::computeCollisionPenaltyGradient(const Eigen::ArrayXd& x,
   return E;
 };
 
+std::array<unsigned, 3>
+ElasticModel::closestSurfaceFromPoint(unsigned iPoint, unsigned iSurface,
+                                      const Eigen::ArrayXd &x) {
+  unsigned n = surfaces[iSurface].size();
+  auto& surface = surfaces[iSurface];
+  double dMin = 1e33;
+  unsigned i0Min=0, i1Min=1;
+  for(int i=0; i < n; i++) {
+    unsigned i0 = 2*surface[i];
+    unsigned i1 = 2*surface[(i+1)%n];
+    double px = x[iPoint], py=x[iPoint+1];
+    double p0x = x[i0], p0y=x[i0+1];
+    double p1x = x[i1], p1y=x[i1+1];
+    double d = squarePointLineSegmentDistance(px, py, p0x, p0y, p1x, p1y); 
+    if(d<dMin) {
+      i0Min=i0;
+      i1Min=i1;
+      dMin = d;
+    }
+  }
+  return {iPoint, i0Min, i1Min};
+}
 // This function computes the list containing collisions to be resolved during
 // the energy function optimization step
 void ElasticModel::populateSelfCollisionList(const Eigen::ArrayXd& x) {
@@ -235,6 +261,11 @@ void ElasticModel::populateSelfCollisionList(const Eigen::ArrayXd& x) {
       if (iPoint == i || iPoint == j || iPoint == k) {
         continue;
       }
+      /**
+       * Compute the distance to all triangle edges. If the closest or the second
+       * closest edge is a surface edge, add it to the collision list. Else look
+       * for the closest surface edge withing the given surface.
+      */
       if (pointInTriangle(x(iPoint + 0), x(iPoint + 1), x(i + 0), x(i + 1),
                           x(j + 0), x(j + 1), x(k + 0), x(k + 1))) {
         double d1 = squarePointLineSegmentDistance(
@@ -246,37 +277,18 @@ void ElasticModel::populateSelfCollisionList(const Eigen::ArrayXd& x) {
         double d3 = squarePointLineSegmentDistance(
             x(iPoint + 0), x(iPoint + 1), x(j + 0), x(j + 1), x(k + 0),
             x(k + 1));
-        if (d1 < d2 && d1 < d3) {
-          if(isSurfaceEdge[{i/2,j/2}]) {
-            // case this is a surface edge and it is closest to point
+        if (d1 < d2 && d1 < d3 && isSurfaceEdge[{i/2,j/2}]) {
             selfCollisionList.push_back({iPoint, i, j});
-            continue;
-          } 
-          if(!(isSurfaceEdge[{i/2,k/2}] || isSurfaceEdge[{j/2,k/2}])) {
-            // case none of the other edges in the triangle is a surface edge
-            // -> Look for closest surface edge going from edge (i,k)
-            auto s = closestSurfaceFromEdge[{i/2,j/2}];
-            selfCollisionList.push_back({iPoint, 2*s[0], 2*s[1]});
-            continue;
           }
-        } 
-        if (d2 < d3) {
-          if(isSurfaceEdge[{i/2,k/2}]) {
-            // case this is a surface edge and it is closest to point
+        else if ((d2 < d3) && isSurfaceEdge[{i/2, k/2}]) {
             selfCollisionList.push_back({iPoint, i, k});
-            continue;
-          } 
-          if(!(isSurfaceEdge[{j/2,k/2}])) {
-            // case the next edge in the triangle is not a surface edge
-            // -> Look for closest surface edge going from edge (i,k)
-            auto s = closestSurfaceFromEdge[{i/2,k/2}];
-            selfCollisionList.push_back({iPoint, 2*s[0], 2*s[1]});
-          }
-          continue;
-        } 
-        auto s = closestSurfaceFromEdge[{j/2,k/2}];
-        selfCollisionList.push_back({iPoint, 2*s[0], 2*s[1]});
-        continue;
+        }  
+        else if ((d3 < d2) && isSurfaceEdge[{j/2, k/2}]) {
+            selfCollisionList.push_back({iPoint, j, k});
+        }  else {
+            unsigned iSurface = surfaceFromVertex[i/2];
+            selfCollisionList.push_back(closestSurfaceFromPoint(iPoint, iSurface, x));
+        }
       }
     }
   }
@@ -403,9 +415,9 @@ void ElasticModel::collisionPrecompute(const std::vector<double>& vertices) {
       isSurfaceEdge[{s[(i+1)%s.size()], s[i]}] = 1; 
     }
   }
-  for(auto& e: isSurfaceEdge) {
-    printf("Surface Edge %d,%d? -> %d\n", e.first[0], e.first[1], e.second);
-  }
+  // for(auto& e: isSurfaceEdge) {
+    // printf("Surface Edge %d,%d? -> %d\n", e.first[0], e.first[1], e.second);
+  // }
   // Compute the closest surface from edge map. The edge-edge distance is defined
   // as the minimum of the average of the two point distances.
   for (unsigned u = 0; u < m; u++) {
@@ -441,13 +453,15 @@ void ElasticModel::collisionPrecompute(const std::vector<double>& vertices) {
           if(edgeDistance < shortestEdgeDistance) {
             shortestEdgeDistance = edgeDistance;
             closestSurfaceFromEdge[e] = {s[i], s[(i+1)%s.size()]};
+            surfaceFromVertex[e[0]] = j;
+            surfaceFromVertex[e[1]] = j;
           }
         }
       j++;
       }
       auto csf = closestSurfaceFromEdge[e];
-      printf("Edge %d,%d -> %d,%d\n", e[0], e[1], closestSurfaceFromEdge[e][0],
-                                                  closestSurfaceFromEdge[e][1]);
+      // printf("Edge %d,%d -> %d,%d\n", e[0], e[1], closestSurfaceFromEdge[e][0],
+      //                                             closestSurfaceFromEdge[e][1]);
     }
   }
 }

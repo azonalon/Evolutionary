@@ -33,6 +33,7 @@ public:
     // contains the closest surface edge for each edge (distance between edges
     // is not really defined, but it is an approximation).
     std::map<std::array<unsigned, 2>, std::array<unsigned,2>> closestSurfaceFromEdge;
+    std::vector<unsigned> surfaceFromVertex;
     std::map<std::array<unsigned, 2>, int> isSurfaceEdge;
     std::function<void(const std::vector<std::array<unsigned, 3>>&)> collisionListPopulatedHook =
         [](auto collisionList) { return; };
@@ -75,31 +76,42 @@ public:
 
     void computeFluidFrictionGradientDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
 
-    // /**
-    //  * Generates a finite element elastic model solver.
-    //  * Vertices are stored in a single vector (x1, y1, x2, y2..., xn, yn)
-    //  * triangle indices are ((t11, t12, t13), (t21, t22, t23), ..., (tm1, tm2, tm3))
-    //  * the tij specify offsets to the x coordinates of the vertex stored in vertices
-    //  */
-    // ElasticModel(std::vector<double> vertices,  const std::vector<std::array<int,3>>& triangles,
-    //                     std::vector<double> k, std::vector<double> nu, std::vector<double> M) {
-    //     ElasticModel(vertices, triangles, k, nu, M, NEOHOOKEAN);
-    // }
+    std::array<unsigned, 3> closestSurfaceFromPoint(unsigned iPoint, unsigned iSurface, const Eigen::ArrayXd& x); 
 
-    /**
-     * Generates a finite element elastic model solver.
-     * Vertices are stored in a single vector (x1, y1, x2, y2..., xn, yn)
-     * triangle indices are ((t11, t12, t13), (t21, t22, t23), ..., (tm1, tm2, tm3))
-     * the tij specify offsets to the x coordinates of the vertex stored in vertices
-     * TODO: implement class for different elastic models and their respective options
-     */
-    template<class ...Ts>
-    ElasticModel(const std::vector<double>& vertices, const std::vector<std::array<unsigned int,3>>& triangles,
-                const std::vector<double>& _mu, const std::vector<double>& _lambda, const std::vector<double>& M,
-                ElasticModelType model, double eps=0.5):
-                        ImplicitODESolver(vertices.size(), M), n(vertices.size()), m(triangles.size()),
-                        Bm(m), model(model), neo(eps), Te(m, 3), W(m), mu(m), lambda(m), S(m)
-                        {
+      // /**
+      //  * Generates a finite element elastic model solver.
+      //  * Vertices are stored in a single vector (x1, y1, x2, y2..., xn, yn)
+      //  * triangle indices are ((t11, t12, t13), (t21, t22, t23), ..., (tm1,
+      //  tm2, tm3))
+      //  * the tij specify offsets to the x coordinates of the vertex stored in
+      //  vertices
+      //  */
+      // ElasticModel(std::vector<double> vertices,  const
+      // std::vector<std::array<int,3>>& triangles,
+      //                     std::vector<double> k, std::vector<double> nu,
+      //                     std::vector<double> M) {
+      //     ElasticModel(vertices, triangles, k, nu, M, NEOHOOKEAN);
+      // }
+
+      /**
+       * Generates a finite element elastic model solver.
+       * Vertices are stored in a single vector (x1, y1, x2, y2..., xn, yn)
+       * triangle indices are ((t11, t12, t13), (t21, t22, t23), ..., (tm1, tm2,
+       * tm3)) the tij specify offsets to the x coordinates of the vertex stored
+       * in vertices
+       * TODO: implement class for different elastic models and their respective
+       * options
+       */
+      template <class... Ts>
+      ElasticModel(const std::vector<double> &vertices,
+                   const std::vector<std::array<unsigned int, 3>> &triangles,
+                   const std::vector<double> &_mu,
+                   const std::vector<double> &_lambda,
+                   const std::vector<double> &M, ElasticModelType model,
+                   double eps = 0.5)
+          : ImplicitODESolver(vertices.size(), M), n(vertices.size()),
+            m(triangles.size()), Bm(m), model(model), neo(eps), Te(m, 3), W(m),
+            mu(m), lambda(m), S(m), surfaceFromVertex(n / 2) {
 
         assert(triangles.size() == _mu.size());
         assert(_mu.size() == _lambda.size());
@@ -280,4 +292,4 @@ public:
         destDP = dF*(2*mu*E + lambda*E.trace()*Eigen::Matrix2d::Identity())
                     + F*(2*mu*dE + lambda*dE.trace()*Eigen::Matrix2d::Identity() ) ;
     }
-};
+    };
