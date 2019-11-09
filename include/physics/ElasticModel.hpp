@@ -46,7 +46,6 @@ public:
     };
 
     double invertibleEpsilon = 0.3;
-    double kFluid = 1;
     std::vector<CollisionObject*> collisionObjects;
 
 
@@ -72,9 +71,9 @@ public:
 
     void computeCollisionPenaltyGradientDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
 
-    double computeFluidFrictionGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
+    // double computeFluidFrictionGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
 
-    void computeFluidFrictionGradientDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
+    // void computeFluidFrictionGradientDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
 
     std::array<unsigned, 3> closestSurfaceFromPoint(unsigned iPoint, unsigned iSurface, const Eigen::ArrayXd& x); 
 
@@ -147,7 +146,12 @@ public:
                   vertices[i + 0] - vertices[k + 0], vertices[j + 0] - vertices[k + 0],
                   vertices[i + 1] - vertices[k + 1], vertices[j + 1] - vertices[k + 1];
 
-            W[l] = std::abs(temp2x2A.determinant()/2.0);
+            W[l] = temp2x2A.determinant()/2.0;
+            if(W[l] <= 0) {
+                Te(l,2) = j/2;
+                Te(l,1) = k/2;
+                W[l] -= W[l];
+            }
             assert(Math::invert(temp2x2A, Bm[l]));
         }
     }

@@ -15,7 +15,7 @@
 #include "util/Debug.hpp"
 static constexpr bool DEBUG_CHECK_DERIVATIVES = false;
 static constexpr bool DEBUG_LINESEARCH = false;
-static constexpr bool SKIP_LINESEARCH = false;
+static constexpr bool SKIP_LINESEARCH = true;
 
 // TODO: Implement swapping of pointers for the arrays instead of copying
 
@@ -131,8 +131,6 @@ class ImplicitODESolver {
     computeDifferential(x0, dx, df);
     computeDifferential(x1, dx, temp2);
     df += kDamp / dt * temp2 + M * dx / dt / dt;
-    // temp2 = M * dx;
-    // df += M * dx / dt / dt;
   }
 
   void computeNewtonDirection(const Eigen::ArrayXd& g, Eigen::ArrayXd& dn) {
@@ -247,7 +245,6 @@ class ImplicitODESolver {
     x0 = x0 + alpha * dn;
     phi = computeOptimizeGradient(x0, g);
     dG = (g * g).sum();
-    lineSearchHook(this, alpha);
     // return dG * (1 - alpha) * 2;
     return dG;
   }
@@ -306,6 +303,7 @@ class ImplicitODESolver {
       alpha0 = alpha1;
       phi0 = phi1;
       dPhi0 = dPhi1;
+      lineSearchHook(this, alpha1);
       alpha1 = choose(alpha1, phi, dPhi, alphaMax);
       if(DEBUG_LINESEARCH) {
         lineSearchDebugDumpFile(alpha1, -2, 2);
@@ -393,7 +391,8 @@ class ImplicitODESolver {
                        double alphaMax) {
     // TODO: make it smart
     double result = std::min(2 * alpha1, alphaMax);
-    printf("choose called with alphamax=%g, alpha1=%g returned alpha=%g\n", alphaMax, alpha1, result); 
+    printf("choose called with alphamax=%g, alpha1=%g returned alpha=%g\n", 
+                                                  alphaMax, alpha1, result); 
     return result;
   }
 
@@ -409,11 +408,12 @@ class ImplicitODESolver {
                                Eigen::ArrayXd& x0, const Eigen::ArrayXd& fExt) {
     // assert(counter == 0 || v.isApprox((x0-x1)/dt, 1e-24));
     counter++;
-    x2 = x1;
+    // x2 = x1;
     x1 = x0;
-    x0 = 2*x0-x1;
-    temp1 = fExt * MI;
-    x0 = dt * dt * temp1 + x0;
+    x0 += dt*v;
+    // v = (x0 - x1)/dt;
+    // temp1 = fExt * MI;
+    // x0 = dt * dt * temp1 + x0;
     // temp1 =  (x1 - x2)/dt;
     // DERROR("||v||=%g\n", sqrt((temp1*temp1).sum()));
   }
@@ -449,17 +449,17 @@ class ImplicitODESolver {
     iNewton = 0;
     while (iNewton <= 10) {
       dG = newtonStep();
-      if (dG < newtonAccuracy/dim) {
-        DERROR("Newton iteration stopped: i=%d, dG=%g\n---------------------------------\n", iNewton, dG);
-        return;
-      }
-      if (phi >= phiOld) {
-        DERROR("Energy minimization did not converge!\n phi=%g, phiOld=%g\n",
-                phi, phiOld);
-        // assert(false);
-        // break;
-        return;
-      }
+      // if (dG < newtonAccuracy/dim) {
+      //   DERROR("Newton iteration stopped: i=%d, dG=%g\n---------------------------------\n", iNewton, dG);
+      //   return;
+      // }
+      // if (phi >= phiOld) {
+      //   DERROR("Energy minimization did not converge!\n phi=%g, phiOld=%g\n",
+      //           phi, phiOld);
+      //   // assert(false);
+      //   // break;
+      //   return;
+      // }
       phiOld = phi;
       iNewton++;
       DERROR("Newton iteration i=%d, dG=%g, phi=%g\n",  iNewton, dG, phi);

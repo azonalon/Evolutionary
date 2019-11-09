@@ -5,8 +5,8 @@
 #include "physics/ElasticModel.hpp"
 
 using namespace Eigen;
-double strengthSelfCollision = 100000;
-double muSelfFriction = 1000;
+double strengthSelfCollision = 10;
+double muSelfFriction = 1;
 #ifndef SELF_COLLISION_FRICTION_ENABLE
 #define SELF_COLLISION_FRICTION_ENABLE true
 #endif
@@ -22,12 +22,33 @@ static inline double squarePointPointDistance(double px, double py, double p0x,
                                               double p0y) {
   return ((px - p0x) * (px - p0x) + (py - p0y) * (py - p0y));
 }
+static inline double squarePointLineSegmentDistance2(double px, double py, double p0x,
+                                      double p0y, double p1x, double p1y) 
+{                  
+    double dX10 = p1x - p0x;
+    double dY10 = p1y - p0y;
+    double dX0 = px - p0x;
+    double dY0 = py - p0y;
+    double Lsquare = dX10 * dX10 + dY10 * dY10;
+    double t = (dX0*dX10+dY0*dY10)/Lsquare;
+    if(t<=0) {
+      return dX0 * dX0 + dY0 * dY0;
+    } else if(t>=1) {
+      double dX1 = px - p1x;
+      double dY1 = py - p1y;
+      return dX1 * dX1 + dY1 * dY1;
+    } else {
+      double s = (dX10 * dY0 - dX0 * dY10);
+      return s * s / Lsquare;
+    }
+}
 static inline double squarePointLineSegmentDistance(double px, double py, double p0x,
                                       double p0y, double p1x, double p1y) {
   double dX10 = p1x - p0x;
   double dY10 = p1y - p0y;
   double dX0 = px - p0x;
   double dY0 = py - p0y;
+  
   double s = (dX10 * dY0 - dX0 * dY10);
   double Lsquare = dX10 * dX10 + dY10 * dY10;
   return s * s / Lsquare;
@@ -55,13 +76,14 @@ static inline bool pointInTriangle(double px, double py, double p0x, double p0y,
 // vertex i to j)
 double addSelfCollisionPenaltyGradient(std::array<unsigned, 3> triplet,
                                        const Eigen::ArrayXd& MI,
-                                       const Eigen::ArrayXd& x,
+                                       const Eigen::ArrayXd& x0,
+                                       double dt,
                                        Eigen::ArrayXd& dest,
                                        Eigen::ArrayXd& v) {
   unsigned &iPoint = triplet[0], i = triplet[1], j = triplet[2];
-  double px = x(iPoint), py = x(iPoint + 1);
-  double p0x = x(i), p0y = x(i + 1);
-  double p1x = x(j), p1y = x(j + 1);
+  double px = x0(iPoint), py = x0(iPoint + 1);
+  double p0x = x0(i), p0y = x0(i + 1);
+  double p1x = x0(j), p1y = x0(j + 1);
   double dX1 = px - p1x;
   double dY1 = py - p1y;
   double dX0 = px - p0x;
@@ -69,6 +91,9 @@ double addSelfCollisionPenaltyGradient(std::array<unsigned, 3> triplet,
   double dX10 = p1x - p0x;
   double dY10 = p1y - p0y;
 
+  if(dX0*dY10 - dY0*dX10 > 0) {
+    return 0;
+  }
 
 
   double s = -dX10 * dY0 + dX0 * dY10;
@@ -97,28 +122,28 @@ double addSelfCollisionPenaltyGradient(std::array<unsigned, 3> triplet,
   // apply friction
   #if SELF_COLLISION_FRICTION_ENABLE
   double& v0x = v(iPoint);
-  double& v0y = v(iPoint + 1);
+  double& v0y = v(iPoint+1);
   double& v1x = v(i);
-  double& v1y = v(i+ 1);
-  double& v2x = v(j);
-  double& v2y = v(j+ 1);
+  double& v1y = v(i+1);
+  double& v2x = v(j  );
+  double& v2y = v(j+1);
   const double d02 = dX0*dX0+dY0*dY0;
   const double w0 = -1;
   const double w2 = sqrt((d02 - U2)/L2);
   const double w1 = 1-w2;
-  const double mbarInv = w0*w0*MI[iPoint] + w1*w1*MI[i] + w2*w2*MI[j];
-  const double vbarx = mbarInv * (w0 * v0x + w1 * v1x + w2 * v2x);
-  const double vbary = mbarInv * (w0 * v0y + w1 * v1y + w2 * v2y);
-  double jx = dX10*vbarx/L1/mbarInv;
-  double jy = dY10*vbary/L1/mbarInv;
+  const double mbar= 1/(w0*w0*MI[iPoint] + w1*w1*MI[i] + w2*w2*MI[j]);
+  const double vbarx = (w0 * v0x + w1 * v1x + w2 * v2x);
+  const double vbary = (w0 * v0y + w1 * v1y + w2 * v2y);
+  double jx = dY10*( dX10 * vbarx + dY10 * vbary)/L2*mbar;
+  double jy = dX10*( dX10 * vbarx + dY10 * vbary)/L2*mbar;
   double jL = sqrt(jx*jx + jy*jy);
   double frictionFactor = clampOne(muSelfFriction * abs(kf) / jL);
-  v0x  = v0x + w0 * MI[iPoint] * frictionFactor * jx;
-  v0y  = v0y + w0 * MI[iPoint] * frictionFactor * jy;
-  v1x  = v1x + w1 * MI[i     ] * frictionFactor * jx;
-  v1y  = v1y + w1 * MI[i     ] * frictionFactor * jy;
-  v2x  = v2x + w2 * MI[j     ] * frictionFactor * jx;
-  v2y  = v2y + w2 * MI[j     ] * frictionFactor * jy;
+  v0x = (v0x + w0 * MI[iPoint] * frictionFactor * jx);
+  v0y = (v0y + w0 * MI[iPoint] * frictionFactor * jy);
+  v1x = (v1x + w1 * MI[i     ] * frictionFactor * jx);
+  v1y = (v1y + w1 * MI[i     ] * frictionFactor * jy);
+  v2x = (v2x + w2 * MI[j     ] * frictionFactor * jx);
+  v2y = (v2y + w2 * MI[j     ] * frictionFactor * jy);
   #endif
 
   return phi;
@@ -129,7 +154,6 @@ void addSelfCollisionPenaltyGradientDifferential(std::array<unsigned, 3> triplet
                                               const Eigen::ArrayXd& MI,
                                               const Eigen::ArrayXd& x,
                                               const Eigen::ArrayXd& dx,
-                                              const Eigen::ArrayXd& v,
                                               Eigen::ArrayXd& dest) {
   unsigned &iPoint = triplet[0], i = triplet[1], j = triplet[2];
   double px = x(iPoint), py = x(iPoint + 1);
@@ -141,6 +165,9 @@ void addSelfCollisionPenaltyGradientDifferential(std::array<unsigned, 3> triplet
   double dY0 = py - p0y;
   double dX10 = p1x - p0x;
   double dY10 = p1y - p0y;
+  if(dX0*dY10 - dY0*dX10 > 0) {
+    return;
+  }
   double L2 = dX10 * dX10 + dY10 * dY10;
   double L4 = L2 * L2;
   double L6 = L4 * L2;
@@ -223,7 +250,7 @@ double ElasticModel::computeCollisionPenaltyGradient(const Eigen::ArrayXd& x,
     }
   }
   for (auto& triplet : selfCollisionList) {
-    E += addSelfCollisionPenaltyGradient(triplet, MI, x, dest, v);
+    E += addSelfCollisionPenaltyGradient(triplet, MI, x0, dt, dest, v);
   }
   return E;
 };
@@ -241,7 +268,7 @@ ElasticModel::closestSurfaceFromPoint(unsigned iPoint, unsigned iSurface,
     double px = x[iPoint], py=x[iPoint+1];
     double p0x = x[i0], p0y=x[i0+1];
     double p1x = x[i1], p1y=x[i1+1];
-    double d = squarePointLineSegmentDistance(px, py, p0x, p0y, p1x, p1y); 
+    double d = squarePointLineSegmentDistance2(px, py, p0x, p0y, p1x, p1y); 
     if(d<dMin) {
       i0Min=i0;
       i1Min=i1;
@@ -261,6 +288,14 @@ void ElasticModel::populateSelfCollisionList(const Eigen::ArrayXd& x) {
       if (iPoint == i || iPoint == j || iPoint == k) {
         continue;
       }
+      // check if triangle is inversed
+      temp2x2A <<
+            x[i + 0] - x[k + 0], x[j + 0] - x[k + 0],
+            x[i + 1] - x[k + 1], x[j + 1] - x[k + 1];
+
+      if(temp2x2A.determinant() <= 0.001) {
+        continue;
+      };
       /**
        * Compute the distance to all triangle edges. If the closest or the second
        * closest edge is a surface edge, add it to the collision list. Else look
@@ -278,10 +313,10 @@ void ElasticModel::populateSelfCollisionList(const Eigen::ArrayXd& x) {
             x(iPoint + 0), x(iPoint + 1), x(j + 0), x(j + 1), x(k + 0),
             x(k + 1));
         if (d1 < d2 && d1 < d3 && isSurfaceEdge[{i/2,j/2}]) {
-            selfCollisionList.push_back({iPoint, i, j});
+            selfCollisionList.push_back({iPoint,i, j});
           }
         else if ((d2 < d3) && isSurfaceEdge[{i/2, k/2}]) {
-            selfCollisionList.push_back({iPoint, i, k});
+            selfCollisionList.push_back({iPoint, k, i});
         }  
         else if ((d3 < d2) && isSurfaceEdge[{j/2, k/2}]) {
             selfCollisionList.push_back({iPoint, j, k});
@@ -307,7 +342,7 @@ void ElasticModel::computeCollisionPenaltyGradientDifferential(
     }
   }
   for (auto& triplet : selfCollisionList) {
-    addSelfCollisionPenaltyGradientDifferential(triplet, MI, x, dx, v, dest);
+    addSelfCollisionPenaltyGradientDifferential(triplet, MI, x, dx, dest);
   }
 };
 
