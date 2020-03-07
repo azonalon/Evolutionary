@@ -12,8 +12,8 @@ bool pointInTriangle(double px, double py, double p0x, double p0y,
 
 void addSelfCollisionPenaltyForce(
     std::array<unsigned, 3> triplet,
-    const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
+    const VectorD& x, VectorD& dest);
 
 void addSelfCollisionPenaltyForceDifferential(
     std::array<unsigned, 3> triplet,
-    const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
+    const VectorD& x, const VectorD& dx, VectorD& dest);

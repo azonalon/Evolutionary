@@ -1,8 +1,26 @@
 #pragma once
 #include <Eigen/Dense>
 #include <cmath>
+#include <algorithm>
+#include <vector>
+#include <numeric>
 
+typedef std::vector<double> VectorD;
+
+static inline unsigned circ(int i, unsigned N)
+{
+  return (i + N) % N;
+}
 namespace Math {
+static inline VectorD LinSpaced(unsigned N, double a, double b) {
+  VectorD lin(N);
+  double s = (b-a)/double(N);
+  std::generate(lin.begin(), lin.end(), 
+    [n=0, s, a, b]() mutable {n++; return a + n*s;}
+  );
+  return lin;
+}
+
 template <typename T>
 inline constexpr int signum(T x, std::false_type is_signed) {
   return T(0) < x;
@@ -85,4 +103,88 @@ static inline double harmonicMean(double a, double b) {
   return 2 * a * b / (a + b + 1e-9);
 }
 static inline double sqrd(double a) { return a * a; }
-}  // namespace Math
+
+};  // namespace Math
+
+
+static inline VectorD& operator*=(VectorD& v1, const VectorD& v2) {
+  assert(v1.size() == v2.size());
+  std::transform(v1.begin(), v1.end(), 
+                 v2.begin(), v1.begin(),
+                 std::multiplies<double>() );
+  return v1;
+}
+
+static inline VectorD& operator+=(VectorD& v1, const VectorD& v2) {
+  assert(v1.size() == v2.size());
+  std::transform(v1.begin(), v1.end(), 
+                 v2.begin(), v1.begin(),
+                 std::plus<double>() );
+  return v1;
+}
+
+static inline VectorD& operator-=(VectorD& v1, const VectorD& v2) {
+  assert(v1.size() == v2.size());
+  std::transform(v1.begin(), v1.end(), 
+                 v2.begin(), v1.begin(),
+                 std::minus<double>() );
+  return v1;
+}
+
+static inline double sum(const VectorD& v1) {
+  return std::accumulate(v1.begin(), v1.end(), 0.0);
+}
+
+static inline void negate(VectorD& v1) {
+  std::transform(v1.begin(), v1.end(), 
+                 v1.begin(), std::negate<double>());
+}
+
+static inline VectorD operator-(const VectorD& v1, const VectorD& v2) {
+  assert(v1.size() == v2.size());
+  VectorD tmp(v1.size());
+  std::transform(v1.begin(), v1.end(), 
+                 v2.begin(), tmp.begin(),
+                 std::minus<double>() );
+  return tmp;
+}
+
+
+static inline VectorD operator*(const VectorD& v1, const VectorD& v2) {
+  assert(v1.size() == v2.size());
+  VectorD tmp(v1.size());
+  std::transform(v1.begin(), v1.end(), 
+                 v2.begin(), tmp.begin(),
+                 std::multiplies<double>() );
+  return tmp;
+}
+
+static inline VectorD operator+(const VectorD& v1, const VectorD& v2) {
+  assert(v1.size() == v2.size());
+  VectorD tmp(v1.size());
+  std::transform(v1.begin(), v1.end(), 
+                 v2.begin(), tmp.begin(),
+                 std::plus<double>() );
+  return tmp;
+}
+
+static inline VectorD operator+(const VectorD& v1, double x) {
+  VectorD tmp(v1.size());
+  std::transform(v1.begin(), v1.end(), 
+                 tmp.begin(),
+                 [&](double y){return y+x;} );
+  return tmp;
+}
+
+static inline VectorD operator*(const VectorD& v1, double x) {
+  VectorD tmp(v1.size());
+  std::transform(v1.begin(), v1.end(), 
+                 tmp.begin(), [&](double a){return a*x;} );
+  return tmp;
+}
+
+static void setZero(VectorD& v1) {
+  std::fill(v1.begin(), v1.end(), 0.0);
+}
+
+

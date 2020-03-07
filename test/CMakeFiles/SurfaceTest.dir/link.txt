@@ -1,1 +1,0 @@
-/usr/bin/c++   -std=c++17  -rdynamic CMakeFiles/SurfaceTest.dir/physics/SurfaceDetectionTests.cpp.o  -o SurfaceTest ../src/libEvolutionary.a 

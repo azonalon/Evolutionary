@@ -1,8 +1,0 @@
-Test1 2 0.00595554
-Test2 0 0
-Test3 2 0.00382715
-CollisionTest 0 0
-FluidTest 2 0.00311301
----
-Test2
-CollisionTest

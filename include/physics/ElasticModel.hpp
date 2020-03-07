@@ -26,6 +26,10 @@ public:
     // surfaces contains indices to the outer edges for each disconnected 
     // object
     std::vector<std::vector<unsigned int>> surfaces;
+    std::vector<std::vector<double>> surfaceParticleEmissionVelocity;
+    std::vector<std::vector<double>> surfaceParticleEmissionMass;
+    std::vector<double> surfaceParticleLifetime;
+    std::vector<unsigned> surfaceParticleIndices;
     // selfcollisionlist contains in the first index the vertex which collided
     // with the face defined by the two vertices corresponding to the last
     // two indices
@@ -67,15 +71,15 @@ public:
 
     void setSurfaceForce(unsigned iObject, unsigned iSurface, double force);
 
-    double computeCollisionPenaltyGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
+    double computeCollisionPenaltyGradient(const VectorD& x, VectorD& dest);
 
-    void computeCollisionPenaltyGradientDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
+    void computeCollisionPenaltyGradientDifferential(const VectorD& x, const VectorD& dx, VectorD& dest);
 
-    // double computeFluidFrictionGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest);
+    // double computeFluidFrictionGradient(const VectorD& x, VectorD& dest);
 
-    // void computeFluidFrictionGradientDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx, Eigen::ArrayXd& dest);
+    // void computeFluidFrictionGradientDifferential(const VectorD& x, const VectorD& dx, VectorD& dest);
 
-    std::array<unsigned, 3> closestSurfaceFromPoint(unsigned iPoint, unsigned iSurface, const Eigen::ArrayXd& x); 
+    std::array<unsigned, 3> closestSurfaceFromPoint(unsigned iPoint, unsigned iSurface, const VectorD& x); 
 
       // /**
       //  * Generates a finite element elastic model solver.
@@ -131,9 +135,9 @@ public:
         precompute(vertices);
         collisionPrecompute(vertices);
         for(unsigned i=0; i<vertices.size(); i++) {
-            x0(i) = vertices[i];
-            x1(i) = vertices[i];
-            x2(i) = vertices[i];
+            x0[i] = vertices[i];
+            x1[i] = vertices[i];
+            x2[i] = vertices[i];
         }
     }
 
@@ -157,13 +161,13 @@ public:
     }
 
 
-    double computeElasticGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) {
+    double computeElasticGradient(const VectorD& x, VectorD& dest) {
         double stressEnergy=0;
         for(unsigned l=0; l<m; l++){
             unsigned int i=2*Te(l, 0), j=2*Te(l, 1), k=2*Te(l, 2);
             temp2x2A <<
-                  x(i + 0) - x(k + 0), x(j + 0) - x(k + 0),
-                  x(i + 1) - x(k + 1), x(j + 1) - x(k + 1);
+                  x[i + 0] - x[k + 0], x[j + 0] - x[k + 0],
+                  x[i + 1] - x[k + 1], x[j + 1] - x[k + 1];
             temp2x2B = temp2x2A*S[l]*Bm[l];
             if(model == NEOHOOKEAN)
                 stressEnergy += W[l]*neoHookeanStress(temp2x2B, lambda[l], mu[l], temp2x2A);
@@ -191,16 +195,16 @@ public:
      *
      * !!Make sure to zero out dest because the calculations only add to dest
      */
-    void computeElasticDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx,
-                                         Eigen::ArrayXd& dest) {
+    void computeElasticDifferential(const VectorD& x, const VectorD& dx,
+                                         VectorD& dest) {
         for(unsigned l=0; l<m; l++){
             unsigned int i=2*Te(l, 0), j=2*Te(l, 1), k=2*Te(l, 2);
             temp2x2A <<
-                  x(i + 0) - x(k + 0), x(j + 0) - x(k + 0),
-                  x(i + 1) - x(k + 1), x(j + 1) - x(k + 1);
+                  x[i + 0] - x[k + 0], x[j + 0] - x[k + 0],
+                  x[i + 1] - x[k + 1], x[j + 1] - x[k + 1];
             temp2x2B <<
-                  dx(i + 0) - dx(k + 0), dx(j + 0) - dx(k + 0),
-                  dx(i + 1) - dx(k + 1), dx(j + 1) - dx(k + 1);
+                  dx[i + 0] - dx[k + 0], dx[j + 0] - dx[k + 0],
+                  dx[i + 1] - dx[k + 1], dx[j + 1] - dx[k + 1];
             F = temp2x2A * S[l]*Bm[l];
             dF = temp2x2B * S[l]*Bm[l];
             if(model == NEOHOOKEAN)
@@ -216,37 +220,45 @@ public:
         }
     }
 
-    void populateSelfCollisionList(const Eigen::ArrayXd& x);
+    void populateSelfCollisionList(const VectorD& x);
 
-    virtual double computeGradient(const Eigen::ArrayXd& x, Eigen::ArrayXd& dest) override {
+    std::function<double(const ElasticModel*, const VectorD&, VectorD&)> computeStaticPotentialGradient = 
+        [](const auto& m, const auto& x, auto& y){return 0;};
+    std::function<void(const ElasticModel*, const VectorD&, const VectorD&, VectorD&)> 
+        computeStaticPotentialDifferential = 
+        [](const auto& m, const auto& x, const auto& y, auto& z){return;};
+
+    virtual double computeGradient(const VectorD& x, VectorD& dest) override {
       double E = computeElasticGradient(x, dest);
       E += computeCollisionPenaltyGradient(x, dest);
+      E += computeStaticPotentialGradient(this, x, dest);
     //   E += computeFluidFrictionGradient(x, dest);
       return E;
     }
-    virtual void computeDifferential(const Eigen::ArrayXd& x, const Eigen::ArrayXd& dx,
-                                               Eigen::ArrayXd& dest) override {
+    virtual void computeDifferential(const VectorD& x, const VectorD& dx,
+                                               VectorD& dest) override {
         computeElasticDifferential(x, dx, dest);
         computeCollisionPenaltyGradientDifferential(x, dx, dest);
+        computeStaticPotentialDifferential(this, x, dx, dest);
         // computeFluidFrictionGradientDifferential(x, dx, dest);
         return;
     }
 
 
-    virtual void precomputeStep(const Eigen::ArrayXd& x) override {
+    virtual void precomputeStep(const VectorD& x) override {
         populateSelfCollisionList(x);
         // TODO actually precompute stress tensors etc.
     };
 
 
-    inline void addGradientMatrixToVector(Eigen::Matrix2d& H, Eigen::ArrayXd& f,
+    inline void addGradientMatrixToVector(Eigen::Matrix2d& H, VectorD& f,
                                              unsigned i, unsigned j, unsigned k, unsigned l) {
-        f(i + 0) += +W[l]*H(0,0);
-        f(i + 1) += +W[l]*H(1,0);
-        f(j + 0) += +W[l]*H(0,1);
-        f(j + 1) += +W[l]*H(1,1);
-        f(k + 0) += -W[l]*H(0,0) -W[l]*H(0,1);
-        f(k + 1) += -W[l]*H(1,0) -W[l]*H(1,1);
+        f[i + 0] += +W[l]*H(0,0);
+        f[i + 1] += +W[l]*H(1,0);
+        f[j + 0] += +W[l]*H(0,1);
+        f[j + 1] += +W[l]*H(1,1);
+        f[k + 0] += -W[l]*H(0,0) -W[l]*H(0,1);
+        f[k + 1] += -W[l]*H(1,0) -W[l]*H(1,1);
     }
 
 
@@ -280,6 +292,106 @@ public:
         dest = mu*dF + (mu - lambda*logJ)*dest;
         dest = dest + lambda*trIFdF*temp2x2P;
     }
+
+    void emitParticles() {
+        // x1 = x1;
+        for (unsigned i=0; i<surfaceParticleLifetime.size(); i++){
+            surfaceParticleLifetime[i] -= 0.01;
+            if(surfaceParticleLifetime[i] <=0) {
+                eraseParticle(i);
+            }
+        }
+        for (unsigned j=0; j<surfaces.size(); j++) {
+            auto& s = surfaces[j];
+            auto& ss = surfaceParticleEmissionVelocity[j];
+            auto& sm = surfaceParticleEmissionMass[j];
+            for(unsigned i=0; i <s.size(); i++) {
+              if (sm[i] > 0) {
+                unsigned S = s.size();
+                // Spawn particle at current surface vertex location
+                double px = x0[2 * s[i]], py = x0[2 * s[i] + 1];
+
+                // next and previous points on surface list
+                double pxn = px - x0[2 * s[(i + 1) % S]],
+                       pyn = py - x0[2 * s[(i + 1) % S] + 1];
+                double pxp = px - x0[2 * s[(i - 1 + S) % S]],
+                       pyp = py - x0[2 * s[(i - 1 + S) % S] + 1];
+                // normalize
+                double vpx = (pxn + pxp) / 2.0, vpy = (pyn + pyp) / 2.0;
+                double l = ss[i] / (hypot(vpx, vpy) + 0.0001);
+                vpy *= l;
+                vpx *= l;
+                // std::swap(vpx, vpy);
+                double px0 = px - dt * vpx, py0 = py - dt * vpy;
+
+                double Mpx = sm[i], Mpy = sm[i], Mx = M[2 * s[i]],
+                       My = M[2 * s[i] + 1];
+
+                v[2 * s[i] + 0] -= Mpx * vpx / Mx;
+                v[2 * s[i] + 1] -= Mpy * vpy / My;
+                insertParticle(px, py, vpx, vpy, Mpx, Mpy);
+                // n+=2;
+              }
+            }
+        }
+    }
+    inline void insertParticle(double px, double py, double vpx, double vpy, 
+                                double Mpx, double Mpy) {
+        surfaceParticleLifetime.push_back(1.0);
+        surfaceParticleIndices.push_back(x0.size());
+        x0.insert(x0.end(), {px, py});
+        x1.insert(x1.end(), {px, py});
+        x2.insert(x2.end(), {px, py});
+
+        M.insert(M.end(), {Mpx, Mpy});
+        v.insert(v.end(), {vpx, vpy});
+        MI.insert(MI.end(), {1 / Mpx, 1 / Mpy});
+        xHat.insert(xHat.end(), {1.0, 1.0});
+        dn.insert(dn.end(), {0.0, 0.0});
+        g.insert(g.end(), {0.0, 0.0});
+        temp1.insert(temp1.end(), {0.0, 0.0});
+        temp2.insert(temp2.end(), {0.0, 0.0});
+        fExt.insert(fExt.end(), {0.0, 0.0});
+        xAlpha.insert(xAlpha.end(), {1.0, 1.0});
+        r.insert(r.end(), {0.0, 0.0});
+        p.insert(p.end(), {0.0, 0.0});
+        fr.insert(fr.end(), {0.0, 0.0});
+        modelForces.insert(modelForces.end(), {0.0, 0.0});
+    }
+
+    // TODO: Erasing can be made more efficient by moving a different particle
+    // to the place where the old particle was erased
+    inline void eraseParticle(unsigned i) {
+
+        surfaceParticleLifetime.erase(
+            surfaceParticleLifetime.begin() + i,
+            surfaceParticleLifetime.begin() + i + 1
+            );
+        surfaceParticleIndices.erase(
+            surfaceParticleIndices.begin() + i,
+            surfaceParticleIndices.begin() + i + 1
+            );
+
+        i = 2*(i+n);
+        x0.erase(x0.begin()+i, x0.begin()+i+2);
+        x1.erase(x1.begin()+i, x1.begin()+i+2);
+        x2.erase(x2.begin()+i, x2.begin()+i+2);
+        M.erase(M.begin()+i, M.begin()+i+2);
+        v.erase(v.begin()+i, v.begin()+i+2);
+        MI.erase(MI.begin()+i, MI.begin()+i+2);
+        xHat.erase(xHat.begin()+i, xHat.begin()+i+2);
+        dn.erase(dn.begin()+i, dn.begin()+i+2);
+        g.erase(g.begin()+i, g.begin()+i+2);
+        temp1.erase(temp1.begin()+i, temp1.begin()+i+2);
+        temp2.erase(temp2.begin()+i, temp2.begin()+i+2);
+        fExt.erase(fExt.begin()+i, fExt.begin()+i+2);
+        xAlpha.erase(xAlpha.begin()+i, xAlpha.begin()+i+2);
+        r.erase(r.begin()+i, r.begin()+i+2);
+        p.erase(p.begin()+i, p.begin()+i+2);
+        fr.erase(fr.begin()+i, fr.begin()+i+2);
+        modelForces.erase(modelForces.begin()+i, modelForces.begin()+i+2);
+    }
+
     inline static double venantPiolaStress(Eigen::Matrix2d& F,
                                  double lambda, double mu,
                                  Eigen::Matrix2d& dest) {
