@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 3.1)
 project(Evolutionary)
-# set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Debug)
 # set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -DDEBUG -Wall -Wno-unused-function -Wno-int-in-bool-context")
 # set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

@@ -7,6 +7,7 @@
 #include "CollisionObjects.hpp"
 #include <Eigen/StdVector>
 #include <map>
+#include "NeuralNetwork.hpp"
 /**
  * Finite Element elasticity model.
  */
@@ -28,6 +29,8 @@ public:
     std::vector<std::vector<unsigned int>> surfaces;
     std::vector<std::vector<double>> surfaceParticleEmissionVelocity;
     std::vector<std::vector<double>> surfaceParticleEmissionMass;
+    std::vector<NeuralNetwork> brains;
+    std::vector<double> colliding;
     std::vector<double> surfaceParticleLifetime;
     std::vector<unsigned> surfaceParticleIndices;
     // selfcollisionlist contains in the first index the vertex which collided
@@ -69,7 +72,7 @@ public:
         return n/2;
     }
 
-    void setSurfaceForce(unsigned iObject, unsigned iSurface, double force);
+    // void setSurfaceForce(unsigned iObject, unsigned iSurface, double force);
 
     double computeCollisionPenaltyGradient(const VectorD& x, VectorD& dest);
 
@@ -114,7 +117,7 @@ public:
                    double eps = 0.5)
           : ImplicitODESolver(vertices.size(), M), n(vertices.size()),
             m(triangles.size()), Bm(m), model(model), neo(eps), Te(m, 3), W(m),
-            mu(m), lambda(m), S(m), surfaceFromVertex(n / 2) {
+            mu(m), lambda(m), S(m), surfaceFromVertex(n / 2), colliding(vertices.size()) {
 
         assert(triangles.size() == _mu.size());
         assert(_mu.size() == _lambda.size());
@@ -229,9 +232,10 @@ public:
         [](const auto& m, const auto& x, const auto& y, auto& z){return;};
 
     virtual double computeGradient(const VectorD& x, VectorD& dest) override {
-      double E = computeElasticGradient(x, dest);
+      double E = 0;
+      E += computeElasticGradient(x, dest);
       E += computeCollisionPenaltyGradient(x, dest);
-      E += computeStaticPotentialGradient(this, x, dest);
+    //   E += computeStaticPotentialGradient(this, x, dest);
     //   E += computeFluidFrictionGradient(x, dest);
       return E;
     }
@@ -239,13 +243,14 @@ public:
                                                VectorD& dest) override {
         computeElasticDifferential(x, dx, dest);
         computeCollisionPenaltyGradientDifferential(x, dx, dest);
-        computeStaticPotentialDifferential(this, x, dx, dest);
+        // computeStaticPotentialDifferential(this, x, dx, dest);
         // computeFluidFrictionGradientDifferential(x, dx, dest);
         return;
     }
 
 
     virtual void precomputeStep(const VectorD& x) override {
+        setZero(colliding);
         populateSelfCollisionList(x);
         // TODO actually precompute stress tensors etc.
     };
@@ -295,6 +300,7 @@ public:
 
     void emitParticles() {
         // x1 = x1;
+        
         for (unsigned i=0; i<surfaceParticleLifetime.size(); i++){
             surfaceParticleLifetime[i] -= 0.01;
             if(surfaceParticleLifetime[i] <=0) {
@@ -305,33 +311,39 @@ public:
             auto& s = surfaces[j];
             auto& ss = surfaceParticleEmissionVelocity[j];
             auto& sm = surfaceParticleEmissionMass[j];
+
+            // Compute particle emission rate from Neural Network
+            auto m = Eigen::Map<const Eigen::VectorXd>(&colliding[0], this->n);
+            auto o = Eigen::Map<Eigen::VectorXd>(&ss[0], ss.size());
+            brains[j].compute(m, o);
+
             for(unsigned i=0; i <s.size(); i++) {
-              if (sm[i] > 0) {
-                unsigned S = s.size();
-                // Spawn particle at current surface vertex location
-                double px = x0[2 * s[i]], py = x0[2 * s[i] + 1];
+                if (sm[i] > 0) {
+                    unsigned S = s.size();
+                    // Spawn particle at current surface vertex location
+                    double px = x0[2 * s[i]], py = x0[2 * s[i] + 1];
 
-                // next and previous points on surface list
-                double pxn = px - x0[2 * s[(i + 1) % S]],
-                       pyn = py - x0[2 * s[(i + 1) % S] + 1];
-                double pxp = px - x0[2 * s[(i - 1 + S) % S]],
-                       pyp = py - x0[2 * s[(i - 1 + S) % S] + 1];
-                // normalize
-                double vpx = (pxn + pxp) / 2.0, vpy = (pyn + pyp) / 2.0;
-                double l = ss[i] / (hypot(vpx, vpy) + 0.0001);
-                vpy *= l;
-                vpx *= l;
-                // std::swap(vpx, vpy);
-                double px0 = px - dt * vpx, py0 = py - dt * vpy;
+                    // next and previous points on surface list
+                    double pxn = px - x0[2 * s[(i + 1) % S]],
+                        pyn = py - x0[2 * s[(i + 1) % S] + 1];
+                    double pxp = px - x0[2 * s[(i - 1 + S) % S]],
+                        pyp = py - x0[2 * s[(i - 1 + S) % S] + 1];
+                    // normalize
+                    double vpx = (pxn + pxp) / 2.0, vpy = (pyn + pyp) / 2.0;
+                    double l = ss[i] / (hypot(vpx, vpy) + 0.0001);
+                    vpy *= l;
+                    vpx *= l;
+                    // std::swap(vpx, vpy);
+                    double px0 = px - dt * vpx, py0 = py - dt * vpy;
 
-                double Mpx = sm[i], Mpy = sm[i], Mx = M[2 * s[i]],
-                       My = M[2 * s[i] + 1];
+                    double Mpx = sm[i], Mpy = sm[i], Mx = M[2 * s[i]],
+                        My = M[2 * s[i] + 1];
 
-                v[2 * s[i] + 0] -= Mpx * vpx / Mx;
-                v[2 * s[i] + 1] -= Mpy * vpy / My;
-                insertParticle(px, py, vpx, vpy, Mpx, Mpy);
-                // n+=2;
-              }
+                    v[2 * s[i] + 0] -= Mpx * vpx / Mx;
+                    v[2 * s[i] + 1] -= Mpy * vpy / My;
+                    insertParticle(px, py, vpx, vpy, Mpx, Mpy);
+                    // n+=2;
+                }
             }
         }
     }
@@ -356,6 +368,7 @@ public:
         r.insert(r.end(), {0.0, 0.0});
         p.insert(p.end(), {0.0, 0.0});
         fr.insert(fr.end(), {0.0, 0.0});
+        colliding.insert(colliding.end(), {0.0, 0.0});
         modelForces.insert(modelForces.end(), {0.0, 0.0});
     }
 
@@ -373,6 +386,7 @@ public:
             );
 
         i = 2*(i+n);
+        colliding.erase(colliding.begin()+i, colliding.begin()+i+2);
         x0.erase(x0.begin()+i, x0.begin()+i+2);
         x1.erase(x1.begin()+i, x1.begin()+i+2);
         x2.erase(x2.begin()+i, x2.begin()+i+2);

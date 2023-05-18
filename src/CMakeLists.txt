@@ -4,7 +4,7 @@ add_library(Evolutionary
     # physics/FluidFriction.cpp
     # physics/FluidDynamics.cpp
     physics/InvertibleNeoHookeanModel.cpp
-    physics/SurfaceForce.cpp
+    # physics/SurfaceForce.cpp
     physics/InvertibleNeoHookeanStressDensity.cpp
     physics/CollisionObjects.cpp
 )

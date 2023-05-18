@@ -3,7 +3,7 @@
 #include <iostream>
 using namespace Eigen;
 using namespace std;
-static double a = 0.01;
+static double a = 100;
 static double mu = 1;
 
 inline double sign(double x) { return x < 0 ? -1 : 1; }

@@ -3,7 +3,7 @@
 #ifndef EVOLUTIONARY_DEBUG
 #define EVOLUTIONARY_DEBUG false
 #endif
-static constexpr bool DEBUG_CHECK_DERIVATIVES = false;
+static constexpr bool DEBUG_CHECK_DERIVATIVES = true;
 static constexpr bool DEBUG_LINESEARCH = false;
 static constexpr bool SKIP_LINESEARCH = true;
 #pragma once
