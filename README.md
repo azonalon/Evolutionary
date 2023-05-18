@@ -1,3 +1,3 @@
 # Evolutionary
 
-A library for simulating 2d creatures
+A library for simulating deformable bodies
